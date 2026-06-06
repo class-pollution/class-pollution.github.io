@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Showcase Walkthroughs | Python Class Pollution</title>
+    <link rel="stylesheet" href="/wiki/css/wiki.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+    <script>hljs.highlightAll();</script>
+</head>
+<body>
+    <div class="wiki-layout">
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <a href="/wiki/docs/">Class Pollution Wiki</a>
+            </div>
+            <ul class="sidebar-nav">
+
+
+    <li>
+        <a href="/wiki/docs/" >Overview</a>
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/taxonomy/" >Taxonomy</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/taxonomy/atomics/" >Get &amp; Set Atomics</a></li>
+            
+            <li><a href="/wiki/docs/taxonomy/primitives/" >Pollution Primitives</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/targets/" >Pollution Targets</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/targets/classes/" >Classes</a></li>
+            
+            <li><a href="/wiki/docs/targets/modules/" >Modules</a></li>
+            
+            <li><a href="/wiki/docs/targets/functions/" >Functions</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/gadgets/" >Gadgets</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/gadgets/rce/" >RCE Gadgets</a></li>
+            
+            <li><a href="/wiki/docs/gadgets/xss/" >XSS Gadgets</a></li>
+            
+            <li><a href="/wiki/docs/gadgets/auth-bypass/" >Auth Bypass Gadgets</a></li>
+            
+            <li><a href="/wiki/docs/gadgets/dos/" >DoS Gadgets</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/tool/" >Tool</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/tool/pyrl/" >Pyrl</a></li>
+            
+            <li><a href="/wiki/docs/tool/polluter/" >Polluter</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/collection/" >Showcases &amp; CVEs</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/collection/catalog/" >Catalog</a></li>
+            
+            <li><a href="/wiki/docs/collection/showcases/" class="active">Showcase Walkthroughs</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/defense/" >Defense</a>
+        
+    </li>
+    
+
+</ul>
+
+        </nav>
+        <main class="content">
+            
+<article>
+    <h1 id="end-to-end-showcase-walkthroughs">End-to-end Showcase Walkthroughs</h1>
+<p>Each page below walks through the full exploitation chain for a confirmed class pollution vulnerability: the vulnerable function, the pollution payload, the trigger, and the resulting consequence.</p>
+<p>For the assigned CVEs and the index of every walkthrough, see <a href="/wiki/docs/collection/">Showcases &amp; CVEs</a>. For the full 76-package list, see the <a href="/wiki/docs/collection/catalog/">Catalog</a>.</p>
+<ul>
+<li><a href="/wiki/docs/collection/showcases/azure-cli/">Azure CLI</a> - Token Leakage and OS Command Injection through <code>set_properties</code>.</li>
+<li><a href="/wiki/docs/collection/showcases/comfyui/">ComfyUI</a> - DoS through reflective attribute setting.</li>
+<li><a href="/wiki/docs/collection/showcases/django-unicorn/">django-unicorn</a> - DoS, XSS, Auth Bypass, and RCE through a single WebSocket message.</li>
+<li><a href="/wiki/docs/collection/showcases/mesop/">Mesop</a> - DoS and Remote Execution through reflective dataclass update.</li>
+<li><a href="/wiki/docs/collection/showcases/taipy/">Taipy</a> - DoS, XSS, RCE, and Token Leakage through <code>_attrsetter</code>.</li>
+</ul>
+
+</article>
+
+        </main>
+    </div>
+</body>
+</html>

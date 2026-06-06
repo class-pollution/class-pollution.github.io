@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Taxonomy on Python Class Pollution</title>
+    <link>/wiki/docs/taxonomy/</link>
+    <description>Recent content in Taxonomy on Python Class Pollution</description>
+    <generator>Hugo</generator>
+    <language>en-us</language>
+    <atom:link href="/wiki/docs/taxonomy/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Get &amp; Set Atomics</title>
+      <link>/wiki/docs/taxonomy/atomics/</link>
+      <pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate>
+      <guid>/wiki/docs/taxonomy/atomics/</guid>
+      <description>&lt;h1 id=&#34;get--set-atomics&#34;&gt;Get &amp;amp; Set Atomics&lt;/h1&gt;&#xA;&lt;p&gt;This page catalogs the reflective operations Python supports for reading and writing object state. These are the building blocks that the &lt;a href=&#34;/wiki/docs/taxonomy/primitives/&#34;&gt;pollution primitives&lt;/a&gt; page combines into attacker capabilities.&lt;/p&gt;&#xA;&lt;h2 id=&#34;atomic-get-operations&#34;&gt;Atomic &amp;ldquo;get&amp;rdquo; operations&lt;/h2&gt;&#xA;&lt;p&gt;Python has two kinds of atomic &amp;ldquo;get&amp;rdquo;. The first is &lt;strong&gt;attribute access&lt;/strong&gt; (e.g., &lt;code&gt;getattr(obj, name)&lt;/code&gt;), which retrieves values from an object&amp;rsquo;s attribute namespace and is supported by every Python object. The second is &lt;strong&gt;item access&lt;/strong&gt; (e.g., &lt;code&gt;dict[key]&lt;/code&gt;), which retrieves values from a container&amp;rsquo;s item namespace and is only supported by mappings and sequences.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Pollution Primitives</title>
+      <link>/wiki/docs/taxonomy/primitives/</link>
+      <pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate>
+      <guid>/wiki/docs/taxonomy/primitives/</guid>
+      <description>&lt;h1 id=&#34;pollution-primitives&#34;&gt;Pollution Primitives&lt;/h1&gt;&#xA;&lt;p&gt;A &lt;em&gt;pollution primitive&lt;/em&gt; describes what an attacker can choose at each step of the access-then-assign sequence. The &amp;ldquo;get&amp;rdquo; primitive captures choices across the access steps. The &amp;ldquo;set&amp;rdquo; primitive captures the final assignment.&lt;/p&gt;&#xA;&lt;p&gt;The atomic operations that compose each primitive are listed on the &lt;a href=&#34;/wiki/docs/taxonomy/atomics/&#34;&gt;Get &amp;amp; Set Atomics&lt;/a&gt; page.&lt;/p&gt;&#xA;&lt;h2 id=&#34;get-primitives&#34;&gt;Get primitives&lt;/h2&gt;&#xA;&lt;p&gt;There are two get primitives, distinguished by whether the program lets the attacker choose between attribute access and item access at each step.&lt;/p&gt;</description>
+    </item>
+  </channel>
+</rss>

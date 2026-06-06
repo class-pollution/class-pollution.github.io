@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Get &amp; Set Atomics | Python Class Pollution</title>
+    <link rel="stylesheet" href="/wiki/css/wiki.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+    <script>hljs.highlightAll();</script>
+</head>
+<body>
+    <div class="wiki-layout">
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <a href="/wiki/docs/">Class Pollution Wiki</a>
+            </div>
+            <ul class="sidebar-nav">
+
+
+    <li>
+        <a href="/wiki/docs/" >Overview</a>
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/taxonomy/" >Taxonomy</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/taxonomy/atomics/" class="active">Get &amp; Set Atomics</a></li>
+            
+            <li><a href="/wiki/docs/taxonomy/primitives/" >Pollution Primitives</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/targets/" >Pollution Targets</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/targets/classes/" >Classes</a></li>
+            
+            <li><a href="/wiki/docs/targets/modules/" >Modules</a></li>
+            
+            <li><a href="/wiki/docs/targets/functions/" >Functions</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/gadgets/" >Gadgets</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/gadgets/rce/" >RCE Gadgets</a></li>
+            
+            <li><a href="/wiki/docs/gadgets/xss/" >XSS Gadgets</a></li>
+            
+            <li><a href="/wiki/docs/gadgets/auth-bypass/" >Auth Bypass Gadgets</a></li>
+            
+            <li><a href="/wiki/docs/gadgets/dos/" >DoS Gadgets</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/tool/" >Tool</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/tool/pyrl/" >Pyrl</a></li>
+            
+            <li><a href="/wiki/docs/tool/polluter/" >Polluter</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/collection/" >Showcases &amp; CVEs</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/collection/catalog/" >Catalog</a></li>
+            
+            <li><a href="/wiki/docs/collection/showcases/" >Showcase Walkthroughs</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/defense/" >Defense</a>
+        
+    </li>
+    
+
+</ul>
+
+        </nav>
+        <main class="content">
+            
+<article>
+    <h1 id="get--set-atomics">Get &amp; Set Atomics</h1>
+<p>This page catalogs the reflective operations Python supports for reading and writing object state. These are the building blocks that the <a href="/wiki/docs/taxonomy/primitives/">pollution primitives</a> page combines into attacker capabilities.</p>
+<h2 id="atomic-get-operations">Atomic &ldquo;get&rdquo; operations</h2>
+<p>Python has two kinds of atomic &ldquo;get&rdquo;. The first is <strong>attribute access</strong> (e.g., <code>getattr(obj, name)</code>), which retrieves values from an object&rsquo;s attribute namespace and is supported by every Python object. The second is <strong>item access</strong> (e.g., <code>dict[key]</code>), which retrieves values from a container&rsquo;s item namespace and is only supported by mappings and sequences.</p>
+<p>The two namespaces are not interchangeable: an attribute cannot be retrieved with item lookup and vice versa. A third group, <strong>hybrid</strong> operations like <code>eval</code>/<code>exec</code>, can perform either depending on the evaluated expression.</p>
+<p>We surveyed the Python Standard Library and identified 20 syntactic variants. Prevalence numbers come from CodeQL on the 50K most-downloaded PyPI packages.</p>
+<div class="atomics-table">
+<table>
+  <thead>
+      <tr>
+          <th>Code</th>
+          <th>Type</th>
+          <th>Apply</th>
+          <th>Origin</th>
+          <th style="text-align: center">Capability</th>
+          <th style="text-align: right"># Inst.</th>
+          <th style="text-align: right"># Pack.</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>getattr(obj, name)</code></td>
+          <td>Attr</td>
+          <td>O/M/S</td>
+          <td>Builtins</td>
+          <td style="text-align: center"><span class="cap full"></span> <span class="cap full"></span> <span class="cap full"></span></td>
+          <td style="text-align: right">719.1K</td>
+          <td style="text-align: right">21.7K</td>
+      </tr>
+      <tr>
+          <td><code>obj.__dict__[name]</code></td>
+          <td>Attr</td>
+          <td>O/M/S</td>
+          <td>Builtins</td>
+          <td style="text-align: center"><span class="cap half"></span> <span class="cap half"></span> <span class="cap full"></span></td>
+          <td style="text-align: right">15.3K</td>
+          <td style="text-align: right">3.3K</td>
+      </tr>
+      <tr>
+          <td><code>obj.__getattribute__(name)</code></td>
+          <td>Attr</td>
+          <td>O/M/S</td>
+          <td>Builtins</td>
+          <td style="text-align: center"><span class="cap full"></span> <span class="cap full"></span> <span class="cap full"></span></td>
+          <td style="text-align: right">13.1K</td>
+          <td style="text-align: right">1.7K</td>
+      </tr>
+      <tr>
+          <td><code>vars(obj)[name]</code></td>
+          <td>Attr</td>
+          <td>O/M/S</td>
+          <td>Builtins</td>
+          <td style="text-align: center"><span class="cap half"></span> <span class="cap half"></span> <span class="cap full"></span></td>
+          <td style="text-align: right">9.3K</td>
+          <td style="text-align: right">1.0K</td>
+      </tr>
+      <tr>
+          <td><code>dict(inspect.getmembers(obj))[name]</code></td>
+          <td>Attr</td>
+          <td>O/M/S</td>
+          <td>Inspect</td>
+          <td style="text-align: center"><span class="cap full"></span> <span class="cap full"></span> <span class="cap full"></span></td>
+          <td style="text-align: right">4.9K</td>
+          <td style="text-align: right">1.9K</td>
+      </tr>
+      <tr>
+          <td><code>object.__getattribute__(obj, name)</code></td>
+          <td>Attr</td>
+          <td>O/M/S</td>
+          <td>Builtins</td>
+          <td style="text-align: center"><span class="cap full"></span> <span class="cap full"></span> <span class="cap full"></span></td>
+          <td style="text-align: right">4.3K</td>
+          <td style="text-align: right">843</td>
+      </tr>
+      <tr>
+          <td><code>operator.attrgetter(name)(obj)</code></td>
+          <td>Attr</td>
+          <td>O/M/S</td>
+          <td>Operator</td>
+          <td style="text-align: center"><span class="cap full"></span> <span class="cap full"></span> <span class="cap full"></span></td>
+          <td style="text-align: right">543</td>
+          <td style="text-align: right">194</td>
+      </tr>
+      <tr>
+          <td><code>inspect.getattr_static(obj, name)</code></td>
+          <td>Attr</td>
+          <td>O/M/S</td>
+          <td>Inspect</td>
+          <td style="text-align: center"><span class="cap full"></span> <span class="cap full"></span> <span class="cap full"></span></td>
+          <td style="text-align: right">398</td>
+          <td style="text-align: right">121</td>
+      </tr>
+      <tr>
+          <td><code>getattr(obj, dir(obj)[index])</code></td>
+          <td>Attr</td>
+          <td>O/M/S</td>
+          <td>Builtins</td>
+          <td style="text-align: center"><span class="cap full"></span> <span class="cap full"></span> <span class="cap full"></span></td>
+          <td style="text-align: right">93</td>
+          <td style="text-align: right">23</td>
+      </tr>
+      <tr>
+          <td><code>dict(inspect.getmembers_static(obj))[name]</code></td>
+          <td>Attr</td>
+          <td>O/M/S</td>
+          <td>Inspect</td>
+          <td style="text-align: center"><span class="cap full"></span> <span class="cap full"></span> <span class="cap full"></span></td>
+          <td style="text-align: right">11</td>
+          <td style="text-align: right">8</td>
+      </tr>
+      <tr>
+          <td><code>dict[key]</code></td>
+          <td>Item</td>
+          <td>M/S</td>
+          <td>Builtins</td>
+          <td style="text-align: center"><span class="cap none"></span> <span class="cap none"></span> <span class="cap full"></span></td>
+          <td style="text-align: right">50.7M</td>
+          <td style="text-align: right">44.1K</td>
+      </tr>
+      <tr>
+          <td><code>dict.get(key)</code></td>
+          <td>Item</td>
+          <td>M</td>
+          <td>Builtins</td>
+          <td style="text-align: center"><span class="cap none"></span> <span class="cap none"></span> <span class="cap full"></span></td>
+          <td style="text-align: right">8.6M</td>
+          <td style="text-align: right">33.1K</td>
+      </tr>
+      <tr>
+          <td><code>dict.pop(key)</code></td>
+          <td>Item</td>
+          <td>M/S</td>
+          <td>Builtins</td>
+          <td style="text-align: center"><span class="cap none"></span> <span class="cap none"></span> <span class="cap full"></span></td>
+          <td style="text-align: right">1.7M</td>
+          <td style="text-align: right">17.9K</td>
+      </tr>
+      <tr>
+          <td><code>dict.setdefault(key)</code></td>
+          <td>Item</td>
+          <td>M</td>
+          <td>Builtins</td>
+          <td style="text-align: center"><span class="cap none"></span> <span class="cap none"></span> <span class="cap full"></span></td>
+          <td style="text-align: right">111.1K</td>
+          <td style="text-align: right">8.0K</td>
+      </tr>
+      <tr>
+          <td><code>dict.__getitem__(key)</code></td>
+          <td>Item</td>
+          <td>M/S</td>
+          <td>Builtins</td>
+          <td style="text-align: center"><span class="cap none"></span> <span class="cap none"></span> <span class="cap full"></span></td>
+          <td style="text-align: right">63.3K</td>
+          <td style="text-align: right">3.0K</td>
+      </tr>
+      <tr>
+          <td><code>operator.getitem(dict, key)</code></td>
+          <td>Item</td>
+          <td>M/S</td>
+          <td>Operator</td>
+          <td style="text-align: center"><span class="cap none"></span> <span class="cap none"></span> <span class="cap full"></span></td>
+          <td style="text-align: right">271</td>
+          <td style="text-align: right">79</td>
+      </tr>
+      <tr>
+          <td><code>operator.itemgetter(key)(dict)</code></td>
+          <td>Item</td>
+          <td>M/S</td>
+          <td>Operator</td>
+          <td style="text-align: center"><span class="cap none"></span> <span class="cap none"></span> <span class="cap full"></span></td>
+          <td style="text-align: right">153</td>
+          <td style="text-align: right">60</td>
+      </tr>
+      <tr>
+          <td><code>operator.__getitem__(dict, key)</code></td>
+          <td>Item</td>
+          <td>M/S</td>
+          <td>Operator</td>
+          <td style="text-align: center"><span class="cap none"></span> <span class="cap none"></span> <span class="cap full"></span></td>
+          <td style="text-align: right">3</td>
+          <td style="text-align: right">1</td>
+      </tr>
+      <tr>
+          <td><code>eval(f&quot;EXPR&quot;, {&quot;o&quot;: obj})</code></td>
+          <td>Attr/Item</td>
+          <td>O/M/S</td>
+          <td>Builtins</td>
+          <td style="text-align: center"><span class="cap full"></span> <span class="cap full"></span> <span class="cap full"></span></td>
+          <td style="text-align: right">331</td>
+          <td style="text-align: right">135</td>
+      </tr>
+      <tr>
+          <td><code>exec(f&quot;EXPR&quot;, {&quot;o&quot;: obj})</code></td>
+          <td>Attr/Item</td>
+          <td>O/M/S</td>
+          <td>Builtins</td>
+          <td style="text-align: center"><span class="cap full"></span> <span class="cap full"></span> <span class="cap full"></span></td>
+          <td style="text-align: right">172</td>
+          <td style="text-align: right">112</td>
+      </tr>
+  </tbody>
+</table>
+</div>
+<p class="table-legend"><strong>Legend.</strong> <em>Apply</em>: O = Object, M = Mapping, S = Sequence. <em>Capability</em> shows what kinds of names the operation can retrieve, as a triple <strong>dunder / method / other</strong>: <span class="cap full"></span> fully supported, <span class="cap half"></span> conditionally supported (<code>obj.__dict__[name]</code> and <code>vars(obj)[name]</code> only apply when the object has a writable <code>__dict__</code>), <span class="cap none"></span> not supported. <em>EXPR</em> in the <code>eval</code>/<code>exec</code> rows means any of the other operations above with only the key name attacker-controlled.</p>
+<h2 id="atomic-set-operations">Atomic &ldquo;set&rdquo; operations</h2>
+<p>Python has two kinds of atomic &ldquo;set&rdquo;: <strong>attribute assignment</strong> (e.g., <code>setattr(obj, name, val)</code>) and <strong>item assignment</strong> (e.g., <code>dict[key] = val</code>). Unlike &ldquo;get&rdquo;, the two atomic &ldquo;sets&rdquo; are interchangeable when the target object has a writable <code>__dict__</code>: <code>obj.x = v</code> is semantically equivalent to <code>obj.__dict__[&quot;x&quot;] = v</code>.</p>
+<p>We surveyed the Python Standard Library and identified 12 syntactic variants. Prevalence numbers come from CodeQL on the 50K most-downloaded PyPI packages.</p>
+<div class="atomics-table">
+<table>
+  <thead>
+      <tr>
+          <th>Code</th>
+          <th>Type</th>
+          <th>Apply</th>
+          <th>Origin</th>
+          <th style="text-align: right"># Inst.</th>
+          <th style="text-align: right"># Pack.</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><code>obj.__dict__[name] = val</code></td>
+          <td>Attr</td>
+          <td>O/M/S</td>
+          <td>Builtins</td>
+          <td style="text-align: right">437.8K</td>
+          <td style="text-align: right">3.1K</td>
+      </tr>
+      <tr>
+          <td><code>setattr(obj, name, val)</code></td>
+          <td>Attr</td>
+          <td>O/M/S</td>
+          <td>Builtins</td>
+          <td style="text-align: right">214.3K</td>
+          <td style="text-align: right">12.0K</td>
+      </tr>
+      <tr>
+          <td><code>object.__setattr__(obj, name, val)</code></td>
+          <td>Attr</td>
+          <td>O/M/S</td>
+          <td>Builtins</td>
+          <td style="text-align: right">11.4K</td>
+          <td style="text-align: right">1.6K</td>
+      </tr>
+      <tr>
+          <td><code>obj.__setattr__(name, val)</code></td>
+          <td>Attr</td>
+          <td>O/M/S</td>
+          <td>Builtins</td>
+          <td style="text-align: right">10.4K</td>
+          <td style="text-align: right">2.3K</td>
+      </tr>
+      <tr>
+          <td><code>dict[key] = val</code></td>
+          <td>Item</td>
+          <td>M/S</td>
+          <td>Builtins</td>
+          <td style="text-align: right">7.7M</td>
+          <td style="text-align: right">36.8K</td>
+      </tr>
+      <tr>
+          <td><code>dict.update(key=val)</code></td>
+          <td>Item</td>
+          <td>M</td>
+          <td>Builtins</td>
+          <td style="text-align: right">687.8K</td>
+          <td style="text-align: right">22.7K</td>
+      </tr>
+      <tr>
+          <td><code>dict.setdefault(key, val)</code></td>
+          <td>Item</td>
+          <td>M</td>
+          <td>Builtins</td>
+          <td style="text-align: right">111.1K</td>
+          <td style="text-align: right">8.0K</td>
+      </tr>
+      <tr>
+          <td><code>dict.__setitem__(key, val)</code></td>
+          <td>Item</td>
+          <td>M/S</td>
+          <td>Builtins</td>
+          <td style="text-align: right">7.7K</td>
+          <td style="text-align: right">2.2K</td>
+      </tr>
+      <tr>
+          <td><code>operator.setitem(dict, key, val)</code></td>
+          <td>Item</td>
+          <td>M/S</td>
+          <td>Operator</td>
+          <td style="text-align: right">27</td>
+          <td style="text-align: right">12</td>
+      </tr>
+      <tr>
+          <td><code>operator.__setitem__(dict, key, val)</code></td>
+          <td>Item</td>
+          <td>M/S</td>
+          <td>Operator</td>
+          <td style="text-align: right">0</td>
+          <td style="text-align: right">0</td>
+      </tr>
+      <tr>
+          <td><code>exec(f&quot;EXPR&quot;, {&quot;o&quot;: obj})</code></td>
+          <td>Attr/Item</td>
+          <td>O/M/S</td>
+          <td>Builtins</td>
+          <td style="text-align: right">90</td>
+          <td style="text-align: right">47</td>
+      </tr>
+      <tr>
+          <td><code>eval(f&quot;EXPR&quot;, {&quot;o&quot;: obj})</code></td>
+          <td>Attr/Item</td>
+          <td>O/M/S</td>
+          <td>Builtins</td>
+          <td style="text-align: right">16</td>
+          <td style="text-align: right">7</td>
+      </tr>
+  </tbody>
+</table>
+</div>
+<p class="table-legend"><strong>Legend.</strong> <em>Apply</em>: O = Object, M = Mapping, S = Sequence. The <code>exec</code>/<code>eval</code> rows count occurrences where only the key name and value are attacker-controlled.</p>
+<p>The next page, <a href="/wiki/docs/taxonomy/primitives/">Pollution Primitives</a>, groups these atomics by what an attacker can choose at each step in a vulnerable program. That is what determines the variant.</p>
+
+</article>
+
+        </main>
+    </div>
+</body>
+</html>

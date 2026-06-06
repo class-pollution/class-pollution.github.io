@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Overview | Python Class Pollution</title>
+    <link rel="stylesheet" href="/wiki/css/wiki.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+    <script>hljs.highlightAll();</script>
+</head>
+<body>
+    <div class="wiki-layout">
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <a href="/wiki/docs/">Class Pollution Wiki</a>
+            </div>
+            <ul class="sidebar-nav">
+
+
+    <li>
+        <a href="/wiki/docs/" class="active">Overview</a>
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/taxonomy/" >Taxonomy</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/taxonomy/atomics/" >Get &amp; Set Atomics</a></li>
+            
+            <li><a href="/wiki/docs/taxonomy/primitives/" >Pollution Primitives</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/targets/" >Pollution Targets</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/targets/classes/" >Classes</a></li>
+            
+            <li><a href="/wiki/docs/targets/modules/" >Modules</a></li>
+            
+            <li><a href="/wiki/docs/targets/functions/" >Functions</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/gadgets/" >Gadgets</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/gadgets/rce/" >RCE Gadgets</a></li>
+            
+            <li><a href="/wiki/docs/gadgets/xss/" >XSS Gadgets</a></li>
+            
+            <li><a href="/wiki/docs/gadgets/auth-bypass/" >Auth Bypass Gadgets</a></li>
+            
+            <li><a href="/wiki/docs/gadgets/dos/" >DoS Gadgets</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/tool/" >Tool</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/tool/pyrl/" >Pyrl</a></li>
+            
+            <li><a href="/wiki/docs/tool/polluter/" >Polluter</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/collection/" >Showcases &amp; CVEs</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/collection/catalog/" >Catalog</a></li>
+            
+            <li><a href="/wiki/docs/collection/showcases/" >Showcase Walkthroughs</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/defense/" >Defense</a>
+        
+    </li>
+    
+
+</ul>
+
+        </nav>
+        <main class="content">
+            
+<article>
+    <h1 id="python-class-pollution">Python Class Pollution</h1>
+<p><strong>Class pollution</strong> is a vulnerability class where an attacker traverses Python&rsquo;s runtime object graph through dunder attributes such as <code>__class__</code>, <code>__init__</code>, <code>__globals__</code>, and <code>sys.modules</code>, and overwrites attributes in unintended classes, functions, or modules. The traversal is driven by a reflective attribute or item access loop whose path or keys come from untrusted input.</p>
+<p>It is the Python analogue of <a href="https://portswigger.net/web-security/prototype-pollution">JavaScript prototype pollution</a>, but the primitives are richer: Python&rsquo;s class-based object model with a flexible reflection layer lets pollution reach classes, functions, modules, and descriptor slots.</p>
+<h2 id="roadmap">Roadmap</h2>
+<p>This wiki is organized into the following sections. Most readers can pick the entry point that matches their goal:</p>
+<ul>
+<li><strong><a href="/wiki/docs/taxonomy/">Taxonomy</a></strong>: the building blocks of a class pollution vulnerability. Catalogs the <a href="/wiki/docs/taxonomy/atomics/">atomic get/set operations</a> Python exposes and the <a href="/wiki/docs/taxonomy/primitives/">pollution primitives</a> that compose into the six class pollution variants.</li>
+<li><strong><a href="/wiki/docs/targets/">Pollution Targets</a></strong>: runtime objects (<a href="/wiki/docs/targets/classes/">classes</a>, <a href="/wiki/docs/targets/modules/">modules</a>, <a href="/wiki/docs/targets/functions/">functions</a>) that are reachable via reflection and that meaningfully change program behavior when modified.</li>
+<li><strong><a href="/wiki/docs/gadgets/">Gadgets</a></strong>: existing read-then-sink code in the standard library, third-party packages, or the application itself that turns a pollution primitive into <a href="/wiki/docs/gadgets/rce/">RCE</a>, <a href="/wiki/docs/gadgets/xss/">XSS</a>, <a href="/wiki/docs/gadgets/auth-bypass/">Auth Bypass</a>, or <a href="/wiki/docs/gadgets/dos/">DoS</a>.</li>
+<li><strong><a href="/wiki/docs/tool/">Tool</a></strong>: documentation for <em><a href="/wiki/docs/tool/pyrl/">Pyrl</a></em> (the detection tool, built on operational taint analysis over CodeQL) and <em><a href="/wiki/docs/tool/polluter/">Polluter</a></em> (an exploitation/testing helper).</li>
+<li><strong><a href="/wiki/docs/collection/">Collection</a></strong>: assigned CVEs and end-to-end <a href="/wiki/docs/collection/showcases/">showcase walkthroughs</a> of confirmed class pollution vulnerabilities, plus a full <a href="/wiki/docs/collection/catalog/">Catalog</a> of 76 packages with proof-of-concept exploits.</li>
+<li><strong><a href="/wiki/docs/defense/">Defense</a></strong>: mitigations along the object resolution path, including key sanitization at the &ldquo;get&rdquo; primitive and guards at the &ldquo;set&rdquo; primitive.</li>
+</ul>
+<h2 id="about-this-wiki">About this wiki</h2>
+<p>This wiki accompanies our IEEE S&amp;P 2026 paper <a href="https://jackfromeast.github.io/assets/Pyrl.pdf"><em>The First Large-Scale Systematic Study of Python Class Pollution Vulnerability</em></a>. Its goal is to be a living reference for the vulnerability class. Concretely, we want it to:</p>
+<ul>
+<li>Document the taxonomy, targets, and gadgets in a way that is easier to extend than a PDF.</li>
+<li>Track new CVEs, gadgets, and showcases as they are discovered.</li>
+<li>Provide actionable defense guidance for library and application maintainers.</li>
+</ul>
+<h2 id="contributions">Contributions</h2>
+<p>Contributions are welcome: new gadgets, additional showcases, corrections, and translations. The site is built with Hugo from markdown sources under <a href="https://github.com/jackfromeast/python-class-pollution/tree/main/website/source"><code>website/source/</code></a>. To propose a change, open an <a href="https://github.com/jackfromeast/python-class-pollution/issues">issue</a> or a <a href="https://github.com/jackfromeast/python-class-pollution/pulls">pull request</a> on the repo: <a href="https://github.com/jackfromeast/python-class-pollution">https://github.com/jackfromeast/python-class-pollution</a>.</p>
+<h2 id="references">References</h2>
+<ol>
+<li>Abdulraheem Khaled, <em>&ldquo;Prototype Pollution in Python.&rdquo;</em> 2023. <a href="https://blog.abdulrah33m.com/prototype-pollution-in-python/">Link</a>. Also presented at Black Hat MEA 2023, <a href="https://blackhatmea.com/session/prototype-pollution-bug-python">Link</a>.</li>
+<li>Ziyi Ouyang, <em>&ldquo;Research and Explore of Prototype Pollution Attack in Python.&rdquo;</em> ACCTCS 2023. <a href="https://ieeexplore.ieee.org/abstract/document/10145365">Link</a>.</li>
+<li>Qingyun Zhang, <em>&ldquo;Exploitation and prevention of Python prototype chain pollution.&rdquo;</em> Applied and Computational Engineering,43,229-236. <a href="https://doi.org/10.54254/2755-2721/43/20230839">Link</a>.</li>
+<li>Zhengyu Liu, Jiacheng Zhong, Jianjia Yu, Muxi Lyu, Zifeng Kang, Yinzhi Cao, <em>&ldquo;The First Large-Scale Systematic Study of Python Class Pollution Vulnerability.&rdquo;</em> IEEE S&amp;P 2026. <a href="https://jackfromeast.github.io/assets/Pyrl.pdf">Link</a>.</li>
+</ol>
+
+</article>
+
+        </main>
+    </div>
+</body>
+</html>

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Functions | Python Class Pollution</title>
+    <link rel="stylesheet" href="/wiki/css/wiki.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+    <script>hljs.highlightAll();</script>
+</head>
+<body>
+    <div class="wiki-layout">
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <a href="/wiki/docs/">Class Pollution Wiki</a>
+            </div>
+            <ul class="sidebar-nav">
+
+
+    <li>
+        <a href="/wiki/docs/" >Overview</a>
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/taxonomy/" >Taxonomy</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/taxonomy/atomics/" >Get &amp; Set Atomics</a></li>
+            
+            <li><a href="/wiki/docs/taxonomy/primitives/" >Pollution Primitives</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/targets/" >Pollution Targets</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/targets/classes/" >Classes</a></li>
+            
+            <li><a href="/wiki/docs/targets/modules/" >Modules</a></li>
+            
+            <li><a href="/wiki/docs/targets/functions/" class="active">Functions</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/gadgets/" >Gadgets</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/gadgets/rce/" >RCE Gadgets</a></li>
+            
+            <li><a href="/wiki/docs/gadgets/xss/" >XSS Gadgets</a></li>
+            
+            <li><a href="/wiki/docs/gadgets/auth-bypass/" >Auth Bypass Gadgets</a></li>
+            
+            <li><a href="/wiki/docs/gadgets/dos/" >DoS Gadgets</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/tool/" >Tool</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/tool/pyrl/" >Pyrl</a></li>
+            
+            <li><a href="/wiki/docs/tool/polluter/" >Polluter</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/collection/" >Showcases &amp; CVEs</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/collection/catalog/" >Catalog</a></li>
+            
+            <li><a href="/wiki/docs/collection/showcases/" >Showcase Walkthroughs</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/defense/" >Defense</a>
+        
+    </li>
+    
+
+</ul>
+
+        </nav>
+        <main class="content">
+            
+<article>
+    <h1 id="functions">Functions</h1>
+<p>A Python function object exposes three independent access mechanisms for pollution: <code>__globals__</code>, <code>__kwdefaults__</code>, and <code>__closure__</code>. Each one routes the polluted value into program behavior through a different path. The <code>__closure__</code> mechanism is novel to this work. The other two were known in prior literature.</p>
+<h2 id="access-mechanism-global-variable-reference-via-__globals__">Access mechanism: global variable reference via <code>__globals__</code></h2>
+<p>When a function <code>f</code> is accessible, the attacker can modify <code>f.__globals__[&quot;v&quot;]</code>, where <code>v</code> is a global variable in the module where <code>f</code> is defined. Every function carries a reference to its defining module&rsquo;s <code>__dict__</code>, so any accessible function exposes its module&rsquo;s entire namespace, and through <code>sys.modules</code> any other loaded module.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#75715e"># mod.py</span>
+</span></span><span style="display:flex;"><span>TEMPLATE_DIR <span style="color:#f92672">=</span> <span style="color:#e6db74">&#34;/srv/app/templates&#34;</span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">render</span>(name):
+</span></span><span style="display:flex;"><span>    path <span style="color:#f92672">=</span> TEMPLATE_DIR <span style="color:#f92672">+</span> <span style="color:#e6db74">&#34;/&#34;</span> <span style="color:#f92672">+</span> name        <span style="color:#75715e"># uses the global TEMPLATE_DIR</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> open(path)<span style="color:#f92672">.</span>read()
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>render(<span style="color:#e6db74">&#34;home.html&#34;</span>)                         <span style="color:#75715e"># reads /srv/app/templates/home.html</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># Attacker payload (Item-Set on render.__globals__):</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e">#   render.__globals__[&#34;TEMPLATE_DIR&#34;] = &#34;/etc&#34;</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>render(<span style="color:#e6db74">&#34;passwd&#34;</span>)                            <span style="color:#75715e"># reads /etc/passwd</span>
+</span></span></code></pre></div><p>This is the same effect as polluting <a href="/wiki/docs/targets/modules/">Modules</a> directly, but routed through a function instead of through a module reference.</p>
+<h2 id="access-mechanism-local-variable-reference-via-__kwdefaults__">Access mechanism: local variable reference via <code>__kwdefaults__</code></h2>
+<p>When a function <code>f</code> has keyword-only parameters, their default values live in the dictionary <code>f.__kwdefaults__</code>. Modifying an entry changes the default value used by every subsequent call that does not pass the argument explicitly. Keyword-only parameters are the parameters defined after <code>*</code> in the signature (<a href="https://peps.python.org/pep-3102/">PEP 3102</a>).</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">render_template</span>(name, <span style="color:#f92672">*</span>, autoescape<span style="color:#f92672">=</span><span style="color:#66d9ef">True</span>, cache<span style="color:#f92672">=</span><span style="color:#66d9ef">True</span>):
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">...</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>render_template(<span style="color:#e6db74">&#34;home.html&#34;</span>)        <span style="color:#75715e"># autoescape=True, output is HTML-escaped</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># Attacker payload (Item-Set on render_template.__kwdefaults__):</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e">#   render_template.__kwdefaults__[&#34;autoescape&#34;] = False</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>render_template(<span style="color:#e6db74">&#34;home.html&#34;</span>)        <span style="color:#75715e"># autoescape=False, output is rendered raw, XSS is now possible</span>
+</span></span></code></pre></div><p><code>__kwdefaults__</code> is a dictionary, so this access mechanism requires an <a href="/wiki/docs/taxonomy/primitives/">Item-Set or Dual-Set</a> primitive.</p>
+<h2 id="access-mechanism-local-variable-reference-via-__closure__">Access mechanism: local variable reference via <code>__closure__</code></h2>
+<p>When a function <code>g</code> is accessible as a closure, the attacker can modify the captured variables through <code>g.__closure__[i].cell_contents</code>. Python closures store captured variables in <code>cell</code> objects rather than in the function&rsquo;s own dict, so the cell content is the foothold.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#66d9ef">def</span> <span style="color:#a6e22e">make_checker</span>(allowed):
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">def</span> <span style="color:#a6e22e">is_allowed</span>(user):
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> user <span style="color:#f92672">in</span> allowed      <span style="color:#75715e"># reads the captured `allowed` set</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> is_allowed
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>is_allowed <span style="color:#f92672">=</span> make_checker({<span style="color:#e6db74">&#34;alice&#34;</span>, <span style="color:#e6db74">&#34;bob&#34;</span>})
+</span></span><span style="display:flex;"><span>is_allowed(<span style="color:#e6db74">&#34;eve&#34;</span>)                   <span style="color:#75715e"># returns False</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># Attacker payload (Attr-Set on the captured cell):</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e">#   is_allowed.__closure__[0].cell_contents = {&#34;eve&#34;}</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>is_allowed(<span style="color:#e6db74">&#34;eve&#34;</span>)                   <span style="color:#75715e"># returns True, the access check is bypassed</span>
+</span></span></code></pre></div><p>The cells of a closure are addressed in capture order:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>g<span style="color:#f92672">.</span>__closure__                       <span style="color:#75715e"># tuple of cell objects, in capture order</span>
+</span></span><span style="display:flex;"><span>g<span style="color:#f92672">.</span>__closure__[<span style="color:#ae81ff">0</span>]                    <span style="color:#75715e"># first captured variable&#39;s cell</span>
+</span></span><span style="display:flex;"><span>g<span style="color:#f92672">.</span>__closure__[<span style="color:#ae81ff">0</span>]<span style="color:#f92672">.</span>cell_contents      <span style="color:#75715e"># the actual captured value</span>
+</span></span></code></pre></div><p>See <a href="/wiki/docs/gadgets/xss/">XSS gadgets</a>, <a href="/wiki/docs/gadgets/rce/">RCE gadgets</a>, and <a href="/wiki/docs/gadgets/auth-bypass/">authentication bypass gadgets</a> for end-to-end exploitation chains that build on these mechanisms.</p>
+
+</article>
+
+        </main>
+    </div>
+</body>
+</html>

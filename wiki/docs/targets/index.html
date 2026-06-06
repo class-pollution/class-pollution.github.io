@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pollution Targets | Python Class Pollution</title>
+    <link rel="stylesheet" href="/wiki/css/wiki.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+    <script>hljs.highlightAll();</script>
+</head>
+<body>
+    <div class="wiki-layout">
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <a href="/wiki/docs/">Class Pollution Wiki</a>
+            </div>
+            <ul class="sidebar-nav">
+
+
+    <li>
+        <a href="/wiki/docs/" >Overview</a>
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/taxonomy/" >Taxonomy</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/taxonomy/atomics/" >Get &amp; Set Atomics</a></li>
+            
+            <li><a href="/wiki/docs/taxonomy/primitives/" >Pollution Primitives</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/targets/" class="active">Pollution Targets</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/targets/classes/" >Classes</a></li>
+            
+            <li><a href="/wiki/docs/targets/modules/" >Modules</a></li>
+            
+            <li><a href="/wiki/docs/targets/functions/" >Functions</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/gadgets/" >Gadgets</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/gadgets/rce/" >RCE Gadgets</a></li>
+            
+            <li><a href="/wiki/docs/gadgets/xss/" >XSS Gadgets</a></li>
+            
+            <li><a href="/wiki/docs/gadgets/auth-bypass/" >Auth Bypass Gadgets</a></li>
+            
+            <li><a href="/wiki/docs/gadgets/dos/" >DoS Gadgets</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/tool/" >Tool</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/tool/pyrl/" >Pyrl</a></li>
+            
+            <li><a href="/wiki/docs/tool/polluter/" >Polluter</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/collection/" >Showcases &amp; CVEs</a>
+        
+        <ul>
+            
+            <li><a href="/wiki/docs/collection/catalog/" >Catalog</a></li>
+            
+            <li><a href="/wiki/docs/collection/showcases/" >Showcase Walkthroughs</a></li>
+            
+        </ul>
+        
+    </li>
+    
+    <li>
+        <a href="/wiki/docs/defense/" >Defense</a>
+        
+    </li>
+    
+
+</ul>
+
+        </nav>
+        <main class="content">
+            
+<article>
+    <h1 id="pollution-targets">Pollution Targets</h1>
+<p>A <em>pollution target</em> is a runtime object that is reachable via attribute or item access and whose value affects program behavior. The <a href="/wiki/docs/taxonomy/primitives/">pollution primitives</a> page describes how an attacker resolves and modifies such an object. This page describes which objects are worth resolving in the first place.</p>
+<p>A polluted target is consumed by the program in two ways.</p>
+<ul>
+<li><strong>Direct access.</strong> The program later reads the same attribute the attacker just wrote, e.g. the attacker sets <code>a.b</code> and the program later reads <code>a.b</code>.</li>
+<li><strong>Indirect access.</strong> Python&rsquo;s data model and reflection layer route the read through a different path. For example, modifying a class variable <code>cls.v</code> changes the default value of <code>self.v</code> for every instance of that class, and modifying a function&rsquo;s <code>__kwdefaults__</code> changes the default value of every keyword-only parameter on subsequent calls.</li>
+</ul>
+<p>Direct access is the boring case. The interesting cases are indirect, and the rest of this section catalogs them.</p>
+<h2 id="categories">Categories</h2>
+<p>We surveyed Python&rsquo;s data model and identified four categories of pollution targets. Each category has a single access mechanism and a loading context that explains how the polluted value reaches a sensitive use site.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Target</th>
+          <th>Access mechanism</th>
+          <th>Description</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><a href="/wiki/docs/targets/classes/">Classes</a></td>
+          <td>Attribute lookup</td>
+          <td><code>C.v</code>, where class <code>C</code> is accessible. The attacker controls <code>cls.v</code> and <code>self.v</code> whenever the attribute is not defined on the instance.</td>
+      </tr>
+      <tr>
+          <td><a href="/wiki/docs/targets/modules/">Modules</a></td>
+          <td>Global variable reference</td>
+          <td><code>mod.v</code>, where module <code>mod</code> is accessible. The attacker controls a global variable used across modules.</td>
+      </tr>
+      <tr>
+          <td><a href="/wiki/docs/targets/functions/">Functions</a> (globals)</td>
+          <td>Global variable reference via module lookup</td>
+          <td><code>f.__globals__[&quot;v&quot;]</code>, where function <code>f</code> is accessible. The attacker controls a global variable in <code>f</code>&rsquo;s defining module.</td>
+      </tr>
+      <tr>
+          <td><a href="/wiki/docs/targets/functions/">Functions</a> (kwdefaults)</td>
+          <td>Local variable reference</td>
+          <td><code>f.__kwdefaults__[&quot;p&quot;]</code>, where function <code>f</code> is accessible. The attacker controls the default value of keyword-only parameter <code>p</code>.</td>
+      </tr>
+      <tr>
+          <td><a href="/wiki/docs/targets/functions/">Functions</a> (closure)</td>
+          <td>Local variable reference</td>
+          <td><code>g.__closure__[i].cell_contents</code>, where function <code>g</code> is accessible as a closure. The attacker controls the captured variable.</td>
+      </tr>
+  </tbody>
+</table>
+<p>The closure foothold (<code>g.__closure__[i].cell_contents</code>) is novel to this work. Prior literature on Python class pollution covered classes, module globals, function <code>__globals__</code>, and <code>__kwdefaults__</code>, but not closure cells.</p>
+<h2 id="why-these-are-the-high-value-targets">Why these are the high-value targets</h2>
+<p>Pollution capability is determined by the <a href="/wiki/docs/taxonomy/primitives/">primitive</a>. Pollution <em>impact</em> is determined by the target. The categories above share two properties that make them especially dangerous.</p>
+<p>First, they are <em>reachable from any object</em>. Every Python value exposes a chain such as <code>obj.__class__.__init__.__globals__[&quot;sys&quot;].modules</code>, which steps from an instance up to its class, into a defining module, and from there into any imported module. Once <code>sys.modules</code> is in scope the attacker can reach <code>os</code>, <code>subprocess</code>, <code>django.conf</code>, and any other loaded library.</p>
+<p>Second, modifications to them propagate beyond the polluted object itself. Polluting a class attribute changes every instance that does not shadow it. Polluting a module global changes every importer. Polluting a function&rsquo;s <code>__kwdefaults__</code> changes every subsequent call without an explicit keyword argument. This propagation is what turns a single reflective write into a remote impact.</p>
+<p>The subpages below cover each category in detail, including the access mechanism, a loading-context snippet, and the typical exploitation shape.</p>
+
+</article>
+
+        </main>
+    </div>
+</body>
+</html>
